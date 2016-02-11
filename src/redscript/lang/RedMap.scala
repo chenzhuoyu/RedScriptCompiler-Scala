@@ -13,15 +13,25 @@ class RedMap(val items: Array[(RedObject, RedObject)]) extends RedObject with Se
     private class ProxyIterator(map: RedMap) extends scala.Iterator[RedObject]
     {
         private val iter = map.items.iterator
-        override def next: RedObject = new RedTuple(iter.next())
         override def hasNext: Boolean = iter.hasNext
+
+        override def next: RedObject =
+        {
+            val next = iter.next()
+            new RedTuple(Array(next._1, next._2))
+        }
     }
 
     private val storage = mutable.HashMap[RedObject, RedObject](items:_*)
 
-    override def apply(idx: Int): RedObject = new RedTuple(items(idx))
     override def length: Int = items.length
     override def iterator: scala.Iterator[RedObject] = new ProxyIterator(this)
+
+    override def apply(idx: Int): RedObject =
+    {
+        val item = items(idx)
+        new RedTuple(Array(item._1, item._2))
+    }
 
     override def __len__  : Long      = items.length
     override def __bool__ : Boolean   = items.nonEmpty

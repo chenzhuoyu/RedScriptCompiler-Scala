@@ -2,9 +2,6 @@ package redscript.lang
 
 class RedTuple(val items: Array[RedObject]) extends RedObject with Seq[RedObject]
 {
-    /* convience constructor for RedMap */
-    def this(tuple: (RedObject, RedObject)) = this(Array[RedObject](tuple._1, tuple._2))
-
     private class Iterator(tuple: RedTuple) extends RedObject
     {
         private val iter = tuple.iterator
