@@ -6,7 +6,7 @@ import scala.util.parsing.input.Positional
 
 trait Node
 {
-    def assemble(assembler: Assembler): Unit
+    def assemble(method: Assembler): Unit
 }
 
 case class Identifier(value: String) extends Positional

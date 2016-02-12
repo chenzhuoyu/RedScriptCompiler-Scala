@@ -8,6 +8,8 @@ class RedObject
 
     def __len__ : Long     = throw new NotSupportedError(s"__len__() is not supported for class ${getClass.getName}")
     def __bool__ : Boolean = throw new NotSupportedError(s"__bool__() is not supported for class ${getClass.getName}")
+
+    def __init__(args: Array[RedObject]): Unit = ()
     def __invoke__(args: Array[RedObject]): RedObject = throw new NotSupportedError(s"${getClass.getName} is not callable")
 
     def __str__  : String = s"<${getClass.getName}>"

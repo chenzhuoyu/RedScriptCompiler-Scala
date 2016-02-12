@@ -75,9 +75,7 @@ class Tokenizer extends StdLexical with TokenSpace
         | 'r' ^^^ '\r')
 
     private lazy val identifier: Parser[Token] =
-        ( identChar ~ ((identChar | digit) *)           ^^ { case first ~ rest => processIdent(first :: rest mkString "") }
-        | '`' ~> (chrExcept('`', '\n', EofCh) *) <~ '`' ^^ { case ident        => processIdent(ident mkString "") }
-        | '`' ~> failure("Unclosed qualified identifier"))
+        identChar ~ ((identChar | digit) *) ^^ { case first ~ rest => processIdent(first :: rest mkString "") }
 
     private lazy val numberLiteral: Parser[Token] =
         ( '.' ~> stringOf(digit)                              ^^ { case       fract => FloatLit(   s"0.$fract".toFloat) }

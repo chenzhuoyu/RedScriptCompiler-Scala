@@ -16,13 +16,16 @@ class NodeFor(name: Identifier, expr: NodeExpr, body: List[NodeStatement]) exten
         assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__iter__", "()Lredscript/lang/RedObject;", false)
         assembler.visitor.visitTryCatchBlock(start, end, handler, "redscript/lang/StopIteration")
         assembler.visitor.visitLabel(start)
+        assembler.classes.top.method.enterLoop()
         assembler.visitor.visitInsn(Opcodes.DUP)
         assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__next__", "()Lredscript/lang/RedObject;", false)
         assembler.visitor.visitVarInsn(Opcodes.ASTORE, variable)
         assembler.visitor.visitLabel(end)
         body.foreach(_.assemble(assembler))
+        assembler.classes.top.method.patchContinues()
         assembler.visitor.visitJumpInsn(Opcodes.GOTO, start)
         assembler.visitor.visitLabel(handler)
+        assembler.classes.top.method.patchBreaks()
         assembler.visitor.visitInsn(Opcodes.POP)
     }
 }
