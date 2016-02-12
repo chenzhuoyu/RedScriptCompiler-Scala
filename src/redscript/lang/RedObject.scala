@@ -26,7 +26,7 @@ class RedObject
     def __bool_not__                  : RedObject = RedBoolean(!__bool__)
 
     def __eq__(other: RedObject) : RedObject = RedBoolean(this == other)
-    def __neq__(other: RedObject): RedObject = RedBoolean(this != other)
+    def __neq__(other: RedObject): RedObject = __eq__(other).__bool_not__
 
     def __le__(other: RedObject) : RedObject = throw new NotSupportedError(s"__le__() is not supported for class ${getClass.getName}")
     def __ge__(other: RedObject) : RedObject = throw new NotSupportedError(s"__ge__() is not supported for class ${getClass.getName}")
@@ -35,6 +35,8 @@ class RedObject
 
     def __iter__ : RedObject = throw new NotSupportedError(s"__iter__() is not supported for class ${getClass.getName}")
     def __next__ : RedObject = throw new NotSupportedError(s"__next__() is not supported for class ${getClass.getName}")
+
+    def __hash__ : Int = super.hashCode
     def __contains__(item: RedObject): Boolean = __eq__(item).__bool__
 
     def __pos__ : RedObject = throw new NotSupportedError(s"__pos__() is not supported for class ${getClass.getName}")
@@ -109,5 +111,12 @@ class RedObject
             RedCallable.wrapObject(methods.head.invoke(this))
     }
 
-    override def toString: String = __str__
+    override def toString = __str__
+    override def hashCode = __hash__
+
+    override def equals(obj: scala.Any): Boolean = obj match
+    {
+        case x: RedObject => __eq__(x).__bool__
+        case _            => false
+    }
 }

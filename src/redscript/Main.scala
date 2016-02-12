@@ -1,14 +1,14 @@
 package redscript
 
-import java.lang.reflect.InvocationTargetException
-
 import redscript.compiler.{Assembler, Parser}
 
 object Main extends App
 {
     val src =
-        """ x = {1: 2}
-          | println(x)
+        """ for x in {1..5} do
+          |     println(x)
+          | end
+          | println('hello, world')
         """.stripMargin
 
     val parser = new Parser(src)
@@ -16,16 +16,10 @@ object Main extends App
 
     Assembler.assemble("Test", astList, (name: String, bytecodes: Array[Byte]) =>
     {
-        new java.io.FileOutputStream(new java.io.File(s"$name.class")).write(bytecodes)
-        val mainMethod = Assembler.injectClass(name, bytecodes).getMethod("main", classOf[Array[String]])
+        new java.io.FileOutputStream(new java.io.File(s"out/$name.class")).write(bytecodes)
+        val ctor = Assembler.injectClass(name, bytecodes).getDeclaredConstructor()
 
-        try
-        {
-            mainMethod.invoke(null, args)
-        } catch
-        {
-            case e: InvocationTargetException =>
-                throw e.getCause
-        }
+        ctor.setAccessible(true)
+        ctor.newInstance()
     })
 }

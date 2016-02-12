@@ -46,17 +46,9 @@ object Builtins
         }
     }
 
-    def Class: RedObject = new RedJavaClass(classOf[Class[_]])
-    def System: RedObject = new RedJavaClass(classOf[System])
-    def Console: RedObject = new RedJavaObject(scala.Console)
-
     val builtins = Map(
         "print"    -> "print",
         "println"  -> "println",
-        "readline" -> "readline",
-
-        "Class"   -> "Class",
-        "System"  -> "System",
-        "Console" -> "Console"
+        "readline" -> "readline"
     )
 }

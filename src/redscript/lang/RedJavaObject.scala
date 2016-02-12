@@ -7,6 +7,13 @@ class RedJavaObject(val obj: AnyRef) extends RedObject
     override def __str__ : String = s"<JavaObject `${obj.toString}`>"
     override def __repr__ : String = s"<JavaObject `${obj.toString}`>"
 
+    override def __hash__ : Int = obj.hashCode
+    override def __eq__(other: RedObject): RedObject = other match
+    {
+        case v: RedJavaObject => RedBoolean(v.obj.equals(obj))
+        case _                => RedBoolean.False
+    }
+
     override def __dir__ : RedTuple =
     {
         val fields = obj.getClass.getFields map (_.getName) map (new RedString(_))

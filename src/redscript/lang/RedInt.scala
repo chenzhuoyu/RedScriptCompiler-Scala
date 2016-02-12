@@ -6,6 +6,8 @@ class RedInt(val value: Long) extends RedObject
 {
     override def __str__ : String = value.toString
     override def __repr__ : String = value.toString
+
+    override def __hash__ : Int = value.hashCode
     override def __bool__ : Boolean = value != 0
 
     override def __pos__      : RedObject = new RedInt(+value)

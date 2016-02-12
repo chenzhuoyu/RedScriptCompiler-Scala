@@ -15,13 +15,16 @@ class NodeName(val name: Identifier) extends Node
         case ident   => assembler.getLocal(ident) match
         {
             case Some(x) => assembler.visitor.visitVarInsn(Opcodes.ALOAD, x)
-            case None    => assembler.hasField(ident) match
+            case None    => assembler.getField(ident) match
             {
-                case true  =>
+                case Assembler.GetStatic =>
+                    assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, assembler.name, ident, "Lredscript/lang/RedObject;")
+
+                case Assembler.GetVirtual =>
                     assembler.visitor.visitVarInsn(Opcodes.ALOAD, 0)
                     assembler.visitor.visitFieldInsn(Opcodes.GETFIELD, assembler.name, ident, "Lredscript/lang/RedObject;")
 
-                case false => Builtins.builtins.get(ident) match
+                case Assembler.NoSuchField => Builtins.builtins.get(ident) match
                 {
                     case Some(x) => assembler.visitor.visitMethodInsn(Opcodes.INVOKESTATIC, "redscript/lang/Builtins", x, "()Lredscript/lang/RedObject;", false)
                     case None    => throw new SyntaxError(s"Identifier '$ident' not found", name.pos.line, name.pos.column)

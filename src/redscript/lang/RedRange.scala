@@ -16,7 +16,19 @@ class RedRange(val lower: RedObject, val upper: RedObject) extends RedObject
 
     override def __str__ : String = "<RedRange>"
     override def __repr__ : String = "<RedRange>"
+
+    override def __hash__ : Int = lower.__hash__ ^ upper.__hash__
     override def __contains__(item: RedObject): Boolean = item.__geq__(lower).__bool_and__(item.__leq__(upper)).__bool__
+
+    override def __eq__(other: RedObject): RedObject = other match
+    {
+        case v: RedRange
+            if v.lower.getClass == lower.getClass &&
+               v.upper.getClass == upper.getClass =>
+                lower.__eq__(v.lower).__bool_and__(upper.__eq__(v.upper))
+
+        case _ => RedBoolean.False
+    }
 
     override def __len__ : Long =
     {

@@ -16,4 +16,6 @@ class RedString(val value: String) extends RedObject
             val hex = Integer.toHexString(ch.toInt)
             "\\u%s%s".format("0" * (4 - hex.length), hex)
     }}) mkString ("\"", "", "\"")
+
+    override def __hash__ : Int = value.hashCode
 }

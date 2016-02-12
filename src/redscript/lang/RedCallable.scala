@@ -107,7 +107,6 @@ class RedCallable(val name: String, val self: AnyRef, val methods: Array[Method]
 
         try
         {
-            println(self)
             RedCallable.wrapObject(callee.invoke(self, params: _*))
         } catch
         {
