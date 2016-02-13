@@ -8,7 +8,7 @@ class NodeReturn(exprs: List[NodeExpr], isTuple: Boolean) extends Node
 {
     override def assemble(assembler: Assembler): Unit =
     {
-        if (assembler.classes.top.methods.size == 1)
+        if (assembler.classes.top.method.isRoot)
             throw new SemanticError("`return` outside of functions")
 
         if (!isTuple)

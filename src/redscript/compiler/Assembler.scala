@@ -48,7 +48,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
         def assemble(nodes: List[Node]): Unit =
         {
             beginMethod("<clinit>", "()V", isStatic = true)
-            method.assemble(nodes)
+            method.assemble(nodes) { visitor.visitInsn(Opcodes.RETURN) }
             endMethod
             callback(name, writer.toByteArray)
         }
@@ -60,6 +60,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
         val breaks = mutable.Stack[mutable.ArrayBuffer[Label]]()
         val continues = mutable.Stack[mutable.ArrayBuffer[Label]]()
 
+        def isRoot: Boolean = name == "<clinit>"
         def getLocal(local: String) = locals.get(local)
         def makeLocal(local: String) = locals.getOrElseUpdate(local, visitor.newLocal(Type.getType(classOf[RedObject])))
 
@@ -90,7 +91,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
         def patchBreaks(): Unit = breaks.pop foreach visitor.visitLabel
         def patchContinues(): Unit = continues.pop foreach visitor.visitLabel
 
-        def assemble(nodes: List[Node]): Unit =
+        def assemble(nodes: List[Node])(finished: => Unit): Unit =
         {
             /* local variable scopes */
             val end = new Label
@@ -108,7 +109,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
             }
 
             /* must return at the end of method */
-            visitor.visitInsn(Opcodes.RETURN)
+            finished
             visitor.visitMaxs(0, 0)
             visitor.visitEnd()
         }
@@ -129,12 +130,13 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
     def findImport(name: String) = classes.top.findImport(name)
     def cacheImport(name: String, className: String) = classes.top.cacheImport(name, className)
 
-    def addClass(className: String) =
+    def endClass = classes.pop
+    def beginClass(className: String, superClassName: String, interfaces: String*) =
     {
         val name = className.replace('.', '/')
         val newClass = new Class(name, this, new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES))
 
-        newClass.writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, name, null, "redscript/lang/RedObject", null)
+        newClass.writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, name, null, superClassName, interfaces.toArray)
         classes.push(newClass)
 
         /* constructor of the main class */
@@ -144,9 +146,9 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
         ctor.visitCode()
         ctor.visitVarInsn(Opcodes.ALOAD, 0)
         ctor.visitInsn(Opcodes.DUP)
-        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, "redscript/lang/RedObject", "<init>", "()V", false)
+        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, superClassName, "<init>", "()V", false)
         ctor.visitVarInsn(Opcodes.ALOAD, 1)
-        ctor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__init__", "([Lredscript/lang/RedObject;)V", false)
+        ctor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, className, "__init__", "([Lredscript/lang/RedObject;)V", false)
         ctor.visitInsn(Opcodes.RETURN)
         ctor.visitMaxs(0, 0)
         ctor.visitEnd()
@@ -160,7 +162,15 @@ object Assembler
     case object GetVirtual
     case object NoSuchField
 
-    def assemble(mainClass: String, nodes: List[Node], callback: (String, Array[Byte]) => Unit): Unit = new Assembler(callback).addClass(mainClass).assemble(nodes)
+    def assemble(mainClass: String, nodes: List[Node], callback: (String, Array[Byte]) => Unit): Unit =
+    {
+        val asm = new Assembler(callback)
+        val cls = asm.beginClass(mainClass, "redscript/lang/RedObject")
+
+        cls.assemble(nodes)
+        asm.endClass
+    }
+
     def injectClass(name: String, bytecodes: Array[Byte]): Class[_] =
     {
         val loader = getClass.getClassLoader
