@@ -12,15 +12,12 @@ class NodeFunction(name: Identifier, args: Option[List[NodeArgument]], body: Lis
         val fname = s"$$FUNC_${name.value}"
         val className = s"$owner$$$fname"
         val ownerClass = assembler.classes.top
-        val methodClass = assembler.beginClass(className, "redscript/lang/RedObject")
+        val methodClass = assembler.beginClass(className, "redscript/lang/RedFunction")
 
         ownerClass.writer.visitInnerClass(className, owner, fname, Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC)
         methodClass.writer.visitOuterClass(owner, null, null)
         methodClass.beginMethod("__invoke__", "([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", isStatic = false)
-        methodClass.method.assemble(body) {
-            assembler.visitor.visitMethodInsn(Opcodes.INVOKESTATIC, "redscript/lang/RedNull", "Null", "()Lredscript/lang/RedNull;", false)
-            assembler.visitor.visitInsn(Opcodes.ARETURN)
-        }
+        methodClass.method.assemble(body)
         methodClass.endMethod
         methodClass.assemble(List())
         assembler.endClass

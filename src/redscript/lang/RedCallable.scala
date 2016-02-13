@@ -5,6 +5,7 @@ import java.lang.reflect.{InvocationTargetException, Method}
 import scala.collection.mutable.ArrayBuffer
 import scala.language.postfixOps
 
+class RedFunction extends RedObject
 class RedCallable(val name: String, val self: AnyRef, val methods: Array[Method]) extends RedObject
 {
     override def __str__ : String = s"<Method `${self.getClass.getName}.$name`>"

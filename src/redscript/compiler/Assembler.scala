@@ -48,7 +48,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
         def assemble(nodes: List[Node]): Unit =
         {
             beginMethod("<clinit>", "()V", isStatic = true)
-            method.assemble(nodes) { visitor.visitInsn(Opcodes.RETURN) }
+            method.assemble(nodes)
             endMethod
             callback(name, writer.toByteArray)
         }
@@ -91,7 +91,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
         def patchBreaks(): Unit = breaks.pop foreach visitor.visitLabel
         def patchContinues(): Unit = continues.pop foreach visitor.visitLabel
 
-        def assemble(nodes: List[Node])(finished: => Unit): Unit =
+        def assemble(nodes: List[Node]): Unit =
         {
             /* local variable scopes */
             val end = new Label
@@ -108,8 +108,17 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
                     visitor.visitLocalVariable(local, "Lredscript/lang/RedObject;", null, start, end, index)
             }
 
-            /* must return at the end of method */
-            finished
+            /* function must return */
+            name match
+            {
+                case "<init>"   => visitor.visitInsn(Opcodes.RETURN)
+                case "<clinit>" => visitor.visitInsn(Opcodes.RETURN)
+                case _          =>
+                    visitor.visitMethodInsn(Opcodes.INVOKESTATIC, "redscript/lang/RedNull", "Null", "()Lredscript/lang/RedNull;", false)
+                    visitor.visitInsn(Opcodes.ARETURN)
+            }
+
+            /* stack informations */
             visitor.visitMaxs(0, 0)
             visitor.visitEnd()
         }
