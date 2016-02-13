@@ -6,8 +6,8 @@ import redscript.lang.RedObject
 object Main extends App
 {
     val src =
-        """ import redscript.lang.SystemExit
-          | raise SystemExit()
+        """
+          | return 1
         """.stripMargin
 
     val parser = new Parser(src)

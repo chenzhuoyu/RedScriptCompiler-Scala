@@ -65,7 +65,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
 
         def markBreak(): Unit = breaks.isEmpty match
         {
-            case true => throw new SemanticError("`break` outside loops")
+            case true => throw new SemanticError("`break` outside of loops")
             case false =>
                 val label = new Label
                 breaks.top += label
@@ -74,7 +74,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
 
         def markContinue(): Unit = continues.isEmpty match
         {
-            case true => throw new SemanticError("`continue` outside loops")
+            case true => throw new SemanticError("`continue` outside of loops")
             case false =>
                 val label = new Label
                 continues.top += label
