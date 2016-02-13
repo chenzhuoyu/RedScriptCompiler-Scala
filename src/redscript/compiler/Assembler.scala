@@ -140,7 +140,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
         /* constructor of the main class */
         val ctor = newClass.writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "([Lredscript/lang/RedObject;)V", null, null)
 
-        /* empty method, code runs in static initialization block */
+        /* forward arguments to `__init__` */
         ctor.visitCode()
         ctor.visitVarInsn(Opcodes.ALOAD, 0)
         ctor.visitInsn(Opcodes.DUP)

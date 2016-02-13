@@ -1,6 +1,9 @@
 package redscript.lang
 
+import java.lang.reflect.Executable
+
 import scala.collection.mutable
+import scala.language.postfixOps
 
 class RedObject
 {
@@ -9,7 +12,7 @@ class RedObject
     def __len__ : Long     = throw new NotSupportedError(s"__len__() is not supported for class ${getClass.getName}")
     def __bool__ : Boolean = throw new NotSupportedError(s"__bool__() is not supported for class ${getClass.getName}")
 
-    def __init__(args: Array[RedObject]): Unit = ()
+    def __init__(args: Array[RedObject]): Unit = if (args.nonEmpty) throw new ArgumentError(s"Constructor of class ${getClass.getName} takes no arguments")
     def __invoke__(args: Array[RedObject]): RedObject = throw new NotSupportedError(s"${getClass.getName} is not callable")
 
     def __str__  : String = s"<${getClass.getName}>"
@@ -216,5 +219,24 @@ object RedObject
             case _                if target.isAssignableFrom(value.getClass) => Some((value, 3))
             case _                                                           => None
         }
+    }
+
+    def convertArguments(callable: Executable, args: Array[RedObject]): (Array[AnyRef], Long) =
+    {
+        var score = 0L
+        val params = new Array[AnyRef](args.length)
+
+        for (((actual, formal), index) <- args zip callable.getParameterTypes zipWithIndex) RedObject.convertObject(actual, formal) match
+        {
+            case None =>
+                return (null, -1)
+
+            case Some((result, factor)) =>
+                score *= 10
+                score += factor
+                params(index) = result
+        }
+
+        (params, score)
     }
 }

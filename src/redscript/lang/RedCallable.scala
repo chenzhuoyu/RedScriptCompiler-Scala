@@ -10,29 +10,12 @@ class RedCallable(val name: String, val self: AnyRef, val methods: Array[Method]
     override def __str__ : String = s"<Method `${self.getClass.getName}.$name`>"
     override def __repr__ : String = s"<Method `${self.getClass.getName}.$name`>"
 
-    private def convertArgs(method: Method, args: Array[RedObject]): (Array[AnyRef], Long) =
-    {
-        var score = 0L
-        val params = new Array[AnyRef](args.length)
-
-        for (((actual, formal), index) <- args zip method.getParameterTypes zipWithIndex) RedObject.convertObject(actual, formal) match
-        {
-            case None                   => return (null, -1)
-            case Some((result, factor)) =>
-                score *= 10
-                score += factor
-                params(index) = result
-        }
-
-        (params, score)
-    }
-
     override def __invoke__(args: Array[RedObject]): RedObject =
     {
         val results = ArrayBuffer[(Method, Array[AnyRef], Long)]()
         val candidates = methods filter (_.getParameterCount == args.length)
 
-        candidates foreach { method => convertArgs(method, args) match
+        candidates foreach { method => RedObject.convertArguments(method, args) match
         {
             case (actual, score) => if (actual != null)
                 results.append((method, actual, score))

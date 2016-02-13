@@ -6,17 +6,8 @@ import redscript.lang.RedObject
 object Main extends App
 {
     val src =
-        """ x = 3
-          | select x in
-          |     case 1, 5 then
-          |         println('hello, world')
-          |
-          |     case {1..10} then
-          |         println('fuck')
-          |
-          |     default
-          |         println('shit')
-          | end
+        """ import redscript.lang.SystemExit
+          | raise SystemExit()
         """.stripMargin
 
     val parser = new Parser(src)
