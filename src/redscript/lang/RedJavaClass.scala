@@ -4,8 +4,8 @@ import java.lang.reflect.InvocationTargetException
 
 class RedJavaClass(val cls: Class[_]) extends RedObject
 {
-    override def __str__ : String = s"<JavaClass `${cls.toString}`>"
-    override def __repr__ : String = s"<JavaClass `${cls.toString}`>"
+    override def __str__ : String = s"<JavaClass `$cls`>"
+    override def __repr__ : String = s"<JavaClass `$cls`>"
 
     override def __hash__ : Int = cls.hashCode
     override def __eq__(other: RedObject): RedObject = other match
@@ -16,33 +16,15 @@ class RedJavaClass(val cls: Class[_]) extends RedObject
 
     override def __dir__ : RedTuple =
     {
-        val fields = cls.getFields map (_.getName) map (new RedString(_))
-        val methods = cls.getMethods map (_.getName) map (new RedString(_))
+        val fields = cls.getFields map (_.getName) map RedString.apply
+        val methods = cls.getMethods map (_.getName) map RedString.apply
         new RedTuple(fields ++ methods)
     }
 
     override def __getattr__(name: String): RedObject =
     {
         if (cls.getFields exists (_.getName == name))
-        {
-            return cls.getField(name).get(cls) match
-            {
-                case field: java.lang.Byte      => new RedInt(field.longValue)
-                case field: java.lang.Long      => new RedInt(field.longValue)
-                case field: java.lang.Short     => new RedInt(field.longValue)
-                case field: java.lang.Integer   => new RedInt(field.longValue)
-
-                case field: java.lang.Float     => new RedFloat(field.floatValue)
-                case field: java.lang.Double    => new RedFloat(field.doubleValue)
-
-                case field: java.lang.String    => new RedString(field)
-                case field: java.lang.Character => new RedString(field.toString)
-                case field: java.lang.Throwable => new RedException(field)
-
-                case field: Class[_]            => new RedJavaClass(field)
-                case field                      => new RedJavaObject(field)
-            }
-        }
+            return RedObject.wrapObject(cls.getField(name).get(cls))
 
         val methods = cls.getMethods filter (_.getName == name)
 
@@ -54,7 +36,7 @@ class RedJavaClass(val cls: Class[_]) extends RedObject
 
         try
         {
-            RedCallable.wrapObject(methods.head.invoke(cls))
+            RedObject.wrapObject(methods.head.invoke(cls))
         } catch
         {
             case e: InvocationTargetException =>

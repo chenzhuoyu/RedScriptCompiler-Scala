@@ -10,7 +10,7 @@ class RedRange(val lower: RedObject, val upper: RedObject) extends RedObject
                 throw new StopIteration()
 
             lower += 1
-            new RedInt(lower - 1)
+            RedInt(lower - 1)
         }
     }
 

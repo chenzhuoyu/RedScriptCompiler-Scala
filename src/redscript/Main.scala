@@ -6,13 +6,14 @@ import redscript.lang.RedObject
 object Main extends App
 {
     val src =
-        """ for x in {1..5} do
-          |     if x == 3 then
-          |         break
-          |     end
-          |     println(x)
+        """ import java.lang.ArithmeticException as AE
+          | try
+          |     (1 / 0)
+          | except AE as e
+          |     println('hahaha', e)
+          |     e.printStackTrace()
           | end
-          | println('hello, world')
+          | println('done')
         """.stripMargin
 
     val parser = new Parser(src)

@@ -36,13 +36,13 @@ object Builtins
         override def __invoke__(args: Array[RedObject]): RedObject =
         {
             if (args.isEmpty)
-                return new RedString(StdIn.readLine())
+                return RedString(StdIn.readLine())
 
             if (args.length != 1)
                 throw new ArgumentError("'readline' takes at most 1 string argument")
 
             scala.Console.err.println(args.head.__str__)
-            new RedString(StdIn.readLine())
+            RedString(StdIn.readLine())
         }
     }
 

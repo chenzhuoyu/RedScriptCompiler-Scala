@@ -2,7 +2,7 @@ package redscript.lang
 
 import scala.math.pow
 
-class RedFloat(val value: Double) extends RedObject
+class RedFloat private(val value: Double) extends RedObject
 {
     override def __str__ : String = value.toString
     override def __repr__ : String = value.toString
@@ -10,8 +10,8 @@ class RedFloat(val value: Double) extends RedObject
     override def __hash__ : Int = value.hashCode
     override def __bool__ : Boolean = value != 0
 
-    override def __pos__      : RedObject = new RedFloat(+value)
-    override def __neg__      : RedObject = new RedFloat(-value)
+    override def __pos__      : RedObject = RedFloat(+value)
+    override def __neg__      : RedObject = RedFloat(-value)
     override def __bool_not__ : RedObject = RedBoolean(value == 0)
 
     private def applyCmp(other: RedObject)(operator: => (Double, Double) => Boolean): RedBoolean = RedBoolean(other match
@@ -23,7 +23,7 @@ class RedFloat(val value: Double) extends RedObject
         case _             => throw new TypeError(s"${other.getClass.getName} is not comparable with Float")
     })
 
-    private def applyFloat(other: RedObject)(operator: => (Double, Double) => Double): RedObject = new RedFloat(operator(value, other match
+    private def applyFloat(other: RedObject)(operator: => (Double, Double) => Double): RedObject = RedFloat(operator(value, other match
     {
         case x: RedInt     => x.value
         case x: RedFloat   => x.value
@@ -56,4 +56,9 @@ class RedFloat(val value: Double) extends RedObject
     override def __inc_mul__(other: RedObject): RedObject = applyFloat(other)(_ * _)
     override def __inc_div__(other: RedObject): RedObject = applyFloat(other)(_ / _)
     override def __inc_mod__(other: RedObject): RedObject = applyFloat(other)(_ % _)
+}
+
+object RedFloat
+{
+    def apply(value: Double): RedFloat = new RedFloat(value)
 }

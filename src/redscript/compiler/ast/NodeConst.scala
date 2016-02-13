@@ -12,21 +12,15 @@ class NodeConst private(value: Either[Long, Either[Double, String]]) extends Nod
     override def assemble(assembler: Assembler): Unit = value match
     {
         case Left(x) =>
-            assembler.visitor.visitTypeInsn(Opcodes.NEW, "redscript/lang/RedInt")
-            assembler.visitor.visitInsn(Opcodes.DUP)
             assembler.visitor.visitLdcInsn(x)
-            assembler.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, "redscript/lang/RedInt", "<init>", "(J)V", false)
+            assembler.visitor.visitMethodInsn(Opcodes.INVOKESTATIC, "redscript/lang/RedInt", "apply", "(J)Lredscript/lang/RedInt;", false)
 
         case Right(Left(x)) =>
-            assembler.visitor.visitTypeInsn(Opcodes.NEW, "redscript/lang/RedFloat")
-            assembler.visitor.visitInsn(Opcodes.DUP)
             assembler.visitor.visitLdcInsn(x)
-            assembler.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, "redscript/lang/RedFloat", "<init>", "(D)V", false)
+            assembler.visitor.visitMethodInsn(Opcodes.INVOKESTATIC, "redscript/lang/RedFloat", "apply", "(D)Lredscript/lang/RedFloat;", false)
 
         case Right(Right(x)) =>
-            assembler.visitor.visitTypeInsn(Opcodes.NEW, "redscript/lang/RedString")
-            assembler.visitor.visitInsn(Opcodes.DUP)
             assembler.visitor.visitLdcInsn(x)
-            assembler.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, "redscript/lang/RedString", "<init>", "(Ljava/lang/String;)V", false)
+            assembler.visitor.visitMethodInsn(Opcodes.INVOKESTATIC, "redscript/lang/RedString", "apply", "(Ljava/lang/String;)Lredscript/lang/RedString;", false)
     }
 }

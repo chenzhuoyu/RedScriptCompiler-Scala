@@ -27,7 +27,7 @@ class RedObject
     def __bool_xor__(other: RedObject): RedObject = RedBoolean(__bool__ != other.__bool__)
     def __bool_not__                  : RedObject = RedBoolean(!__bool__)
 
-    def __eq__(other: RedObject) : RedObject = RedBoolean(this == other)
+    def __eq__(other: RedObject) : RedObject = RedBoolean(super.equals(other))
     def __neq__(other: RedObject): RedObject = __eq__(other).__bool_not__
 
     def __le__(other: RedObject) : RedObject = throw new NotSupportedError(s"__le__() is not supported for class ${getClass.getName}")
@@ -71,8 +71,8 @@ class RedObject
 
     def __dir__ : RedTuple =
     {
-        val fields = getClass.getFields map (_.getName) map (new RedString(_))
-        val methods = getClass.getMethods map (_.getName) map (new RedString(_))
+        val fields = getClass.getFields map (_.getName) map RedString.apply
+        val methods = getClass.getMethods map (_.getName) map RedString.apply
         new RedTuple(fields ++ methods)
     }
 
@@ -82,25 +82,7 @@ class RedObject
             return __dict__(name)
 
         if (getClass.getFields exists (_.getName == name))
-        {
-            return getClass.getField(name).get(this) match
-            {
-                case field: java.lang.Byte      => new RedInt(field.longValue)
-                case field: java.lang.Long      => new RedInt(field.longValue)
-                case field: java.lang.Short     => new RedInt(field.longValue)
-                case field: java.lang.Integer   => new RedInt(field.longValue)
-
-                case field: java.lang.Float     => new RedFloat(field.floatValue)
-                case field: java.lang.Double    => new RedFloat(field.doubleValue)
-
-                case field: java.lang.String    => new RedString(field)
-                case field: java.lang.Character => new RedString(field.toString)
-                case field: java.lang.Throwable => new RedException(field)
-
-                case field: Class[_]            => new RedJavaClass(field)
-                case field                      => new RedJavaObject(field)
-            }
-        }
+            return RedObject.wrapObject(getClass.getField(name).get(this))
 
         val methods = getClass.getMethods filter (_.getName == name)
 
@@ -110,7 +92,7 @@ class RedObject
         if (methods.length > 1 || methods.head.getParameterCount > 0)
             new RedCallable(name, this, methods)
         else
-            RedCallable.wrapObject(methods.head.invoke(this))
+            RedObject.wrapObject(methods.head.invoke(this))
     }
 
     override def toString = __str__
@@ -120,5 +102,119 @@ class RedObject
     {
         case x: RedObject => __eq__(x).__bool__
         case _            => false
+    }
+}
+
+object RedObject
+{
+    def wrapObject(obj: AnyRef): RedObject = obj match
+    {
+        case null                     => RedNull.Null
+        case java.lang.Boolean.TRUE   => RedBoolean.True
+        case java.lang.Boolean.FALSE  => RedBoolean.False
+
+        case v: java.lang.Byte        => RedInt(v.longValue)
+        case v: java.lang.Long        => RedInt(v.longValue)
+        case v: java.lang.Short       => RedInt(v.longValue)
+        case v: java.lang.Integer     => RedInt(v.longValue)
+
+        case v: java.lang.Float       => RedFloat(v.doubleValue)
+        case v: java.lang.Double      => RedFloat(v.doubleValue)
+
+        case v: java.lang.String      => RedString(v)
+        case v: java.lang.Character   => RedString(v.toString)
+        case v: java.lang.Throwable   => RedException(v)
+
+        case v: RedObject             => v
+        case v if v.getClass.isArray  => new RedTuple(v.asInstanceOf[Array[AnyRef]] map wrapObject)
+        case v: Class[_]              => new RedJavaClass(v)
+        case v                        => new RedJavaObject(v)
+    }
+
+    def convertObject(value: RedObject, target: Class[_]): Option[(AnyRef, Int)] = target match
+    {
+        case java.lang.Byte.TYPE => value match
+        {
+            case v: RedInt if v.value >= Byte.MinValue && v.value <= Byte.MaxValue => Some((java.lang.Byte.valueOf(v.value.toByte), 9))
+            case _                                                                 => None
+        }
+
+        case java.lang.Short.TYPE => value match
+        {
+            case v: RedInt if v.value >= Short.MinValue && v.value <= Short.MaxValue => Some((java.lang.Short.valueOf(v.value.toShort), 9))
+            case _                                                                   => None
+        }
+
+        case java.lang.Integer.TYPE => value match
+        {
+            case v: RedInt if v.value >= Int.MinValue && v.value <= Int.MaxValue => Some((java.lang.Integer.valueOf(v.value.toInt), 9))
+            case _                                                               => None
+        }
+
+        case java.lang.Long.TYPE => value match
+        {
+            case v: RedInt => Some((java.lang.Long.valueOf(v.value), 0))
+            case _         => None
+        }
+
+        case java.lang.Float.TYPE => value match
+        {
+            case v: RedInt                                                             => Some((java.lang.Float.valueOf(v.value), 5))
+            case v: RedFloat if v.value >= Float.MinValue && v.value <= Float.MaxValue => Some((java.lang.Float.valueOf(v.value.toFloat), 9))
+            case _                                                                     => None
+        }
+
+        case java.lang.Double.TYPE => value match
+        {
+            case v: RedInt   => Some((java.lang.Double.valueOf(v.value), 5))
+            case v: RedFloat => Some((java.lang.Double.valueOf(v.value), 9))
+            case _           => None
+        }
+
+        case java.lang.Boolean.TYPE => value match
+        {
+            case RedBoolean.True  => Some((java.lang.Boolean.TRUE, 9))
+            case RedBoolean.False => Some((java.lang.Boolean.FALSE, 9))
+            case _                => None
+        }
+
+        case java.lang.Character.TYPE => value match
+        {
+            case v: RedString if v.value.length == 1 => Some((java.lang.Character.valueOf(v.value.head), 9))
+            case _                                   => None
+        }
+
+        case v if v == classOf[Class[_]] => value match
+        {
+            case v: RedJavaClass => Some((v.cls, 9))
+            case _               => None
+        }
+
+        case v if v == classOf[RedObject] => value match
+        {
+            case v: RedObject => Some((v, 9))
+            case _            => None
+        }
+
+        case v if v == classOf[java.lang.String] => value match
+        {
+            case v: RedString => Some((v.value, 9))
+            case _            => None
+        }
+
+        case v if v == classOf[java.lang.Object] => value match
+        {
+            case v: RedJavaClass  => Some((v.cls, 5))
+            case v: RedJavaObject => Some((v.obj, 9))
+            case _                => Some((value, 1))
+        }
+
+        case _ => value match
+        {
+            case v: RedJavaClass  if target.isAssignableFrom(v.cls.getClass) => Some((v.cls, 9))
+            case v: RedJavaObject if target.isAssignableFrom(v.obj.getClass) => Some((v.obj, 9))
+            case _                if target.isAssignableFrom(value.getClass) => Some((value, 3))
+            case _                                                           => None
+        }
     }
 }

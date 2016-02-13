@@ -35,20 +35,25 @@ class Parser(val source: String) extends StdTokenParsers
 
     private lazy val parseImpls     : Parser[Implements]    = "(" ~> rep1sep(attribute, ",") <~ ")"
     private lazy val parseExtends   : Parser[Names]         = "extends" ~> attribute
-
-    private lazy val parseTry       : Parser[NodeTry]       = "try" ~> (parseStatement +) ~ (parseExcept *) ~ (parseFinally ?) <~ "end" ^? { case body ~ except ~ cleanup if except.nonEmpty || cleanup.isDefined => new NodeTry(body, except, cleanup) }
     private lazy val parseFinally   : Parser[Statements]    = "finally" ~> (parseStatement +)
 
-    private lazy val parseCatch     : Parser[NodeCatch]     = attribute ~ (("as" ~> identifier) ?) ^^ { case names ~ name   => new NodeCatch(names, name) }
-    private lazy val parseArgument  : Parser[NodeArgument]  = (">" ?) ~ identifier                 ^^ { case variant ~ name => new NodeArgument(name, variant = variant.isDefined) }
+    private lazy val parseTry       : Parser[NodeTry]       = "try" ~> (parseStatement +) ~ (parseExcept *) ~ (parseFinally ?) <~ "end" ^? {
+        case body ~ except ~ cleanup
+            if !(except.isEmpty && cleanup.isEmpty ||
+                 except.nonEmpty && except.count(_.except == null) >= 2)
+        => new NodeTry(body, except, cleanup)
+    } withFailureMessage "Invalid structure of exception rescure block"
+
+    private lazy val parseArgument  : Parser[NodeArgument]  = (">" ?) ~ identifier                                ^^ { case variant ~ name => new NodeArgument(name, variant.isDefined) }
+    private lazy val parseException : Parser[NodeException] = rep1sep(attribute, "or") ~ (("as" ~> identifier) ?) ^^ { case names ~ name   => NodeException(names, name) }
 
     private lazy val parseImport    : Parser[NodeImport]    =
         (("import" ~> attribute <~ "as") ~ identifier ^^ { case names ~ alias => new NodeImport(names, alias) }
         | "import" ~> attribute                       ^^ { case names         => new NodeImport(names, null) })
 
     private lazy val parseExcept    : Parser[NodeExcept]    = "except" ~>
-        ( "*" ~> (parseStatement *)                      ^^ { case body         => new NodeExcept(null, body) }
-        | rep1sep(parseCatch, "or") ~ (parseStatement *) ^^ { case types ~ body => new NodeExcept(types, body) })
+        ( "*" ~> (parseStatement *)           ^^ { case body          => NodeExcept(null, body) }
+        | parseException ~ (parseStatement *) ^^ { case except ~ body => NodeExcept(except, body) })
 
     private lazy val parseDecorator : Parser[NodeDecorator] =
         ( "@" ~> parseExpr ~ parseLambda    ^^ { case expr ~ func => new NodeDecorator(expr, Left(func)) }
@@ -63,8 +68,8 @@ class Parser(val source: String) extends StdTokenParsers
         ( "return" ~> (parseExpr <~ ",") ~ repsep(parseExpr, ",") ^^ { case first ~ remains => new NodeReturn(first :: remains, true)}
         | "return" ~> parseExpr                                   ^^ { case expr            => new NodeReturn(expr :: Nil, false) })
 
-    private lazy val parseLValue    : Parser[NodeLValue]    = parseValue             ^? { case value if value.isMutable   => new NodeLValue(value) }
-    private lazy val parseDelete    : Parser[NodeDelete]    = "delete" ~> parseValue ^? { case value if value.isDeletable => new NodeDelete(value) }
+    private lazy val parseLValue    : Parser[NodeLValue]    = parseValue             ^? { case value if value.isMutable   => new NodeLValue(value) } withFailureMessage "Assign to constant"
+    private lazy val parseDelete    : Parser[NodeDelete]    = "delete" ~> parseValue ^? { case value if value.isDeletable => new NodeDelete(value) } withFailureMessage "Deleting constant"
 
     private lazy val parseAssign    : Parser[NodeAssign]    = ((parseLValue <~ "=") +) ~ parseExpr            ^^ { case targets ~ expr  => new NodeAssign(targets, expr) }
     private lazy val parseTargets   : Parser[Targets]       = (parseLValue <~ ",") ~ repsep(parseLValue, ",") ^^ { case first ~ remains => first :: remains }

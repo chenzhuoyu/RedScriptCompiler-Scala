@@ -3,7 +3,7 @@ package redscript.compiler
 import org.objectweb.asm._
 import org.objectweb.asm.commons.LocalVariablesSorter
 import redscript.compiler.ast.Node
-import redscript.lang.RedObject
+import redscript.lang.{SemanticError, RedObject}
 
 import scala.collection.mutable
 
@@ -12,6 +12,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
     class Class(val name: String, val owner: Assembler, val writer: ClassWriter)
     {
         val fields = mutable.Map[String, Boolean]()
+        val imports = mutable.Map[String, String]()
         val methods = mutable.Map[String, Method]()
         private val current = mutable.Stack[Method]()
 
@@ -19,7 +20,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
         def endMethod: Method = current.pop
         def beginMethod(name: String, desc: String, isStatic: Boolean) = methods.get(name) match
         {
-            case Some(_) => throw new SyntaxError(s"Duplicate method name `$name`")
+            case Some(_) => throw new SemanticError(s"Duplicate method name `$name`")
             case None    =>
                 val mv = writer.visitMethod(Opcodes.ACC_PUBLIC | (if (isStatic) Opcodes.ACC_STATIC else 0), name, desc, desc, null)
                 val method = new Method(name, isStatic, this, new LocalVariablesSorter(Opcodes.ACC_PUBLIC | (if (isStatic) Opcodes.ACC_STATIC else 0), desc, mv))
@@ -41,6 +42,9 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
             writer.visitField(if (forceStatic) Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_STATIC else Opcodes.ACC_PUBLIC, field, "Lredscript/lang/RedObject;", null, null).visitEnd()
         }
 
+        def findImport(name: String) = imports.get(name)
+        def cacheImport(name: String, className: String) = imports(name) = className
+
         def assemble(nodes: List[Node]): Unit =
         {
             beginMethod("<clinit>", "()V", isStatic = true)
@@ -61,7 +65,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
 
         def markBreak(): Unit = breaks.isEmpty match
         {
-            case true => throw new SyntaxError("`break` outside loops")
+            case true => throw new SemanticError("`break` outside loops")
             case false =>
                 val label = new Label
                 breaks.top += label
@@ -70,7 +74,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
 
         def markContinue(): Unit = continues.isEmpty match
         {
-            case true => throw new SyntaxError("`continue` outside loops")
+            case true => throw new SemanticError("`continue` outside loops")
             case false =>
                 val label = new Label
                 continues.top += label
@@ -121,6 +125,9 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
 
     def getField(field: String) = classes.top.getField(field)
     def makeField(field: String, forceStatic: Boolean = false) = classes.top.makeField(field, forceStatic)
+
+    def findImport(name: String) = classes.top.findImport(name)
+    def cacheImport(name: String, className: String) = classes.top.cacheImport(name, className)
 
     def addClass(className: String) =
     {

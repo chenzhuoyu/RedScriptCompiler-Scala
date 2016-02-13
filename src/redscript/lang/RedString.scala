@@ -1,6 +1,6 @@
 package redscript.lang
 
-class RedString(val value: String) extends RedObject
+class RedString private(val value: String) extends RedObject
 {
     override def __str__ : String = value
     override def __repr__ : String = (value.toList map { _ match
@@ -18,4 +18,9 @@ class RedString(val value: String) extends RedObject
     }}) mkString ("\"", "", "\"")
 
     override def __hash__ : Int = value.hashCode
+}
+
+object RedString
+{
+    def apply(value: String): RedString = new RedString(value)
 }

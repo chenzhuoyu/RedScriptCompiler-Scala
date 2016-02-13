@@ -1,8 +1,9 @@
 package redscript.lang
 
+import scala.language.postfixOps
 import scala.math.pow
 
-class RedInt(val value: Long) extends RedObject
+class RedInt private(val value: Long) extends RedObject
 {
     override def __str__ : String = value.toString
     override def __repr__ : String = value.toString
@@ -10,27 +11,27 @@ class RedInt(val value: Long) extends RedObject
     override def __hash__ : Int = value.hashCode
     override def __bool__ : Boolean = value != 0
 
-    override def __pos__      : RedObject = new RedInt(+value)
-    override def __neg__      : RedObject = new RedInt(-value)
-    override def __not__      : RedObject = new RedInt(~value)
+    override def __pos__      : RedObject = RedInt(+value)
+    override def __neg__      : RedObject = RedInt(-value)
+    override def __not__      : RedObject = RedInt(~value)
     override def __bool_not__ : RedObject = RedBoolean(value == 0)
 
     private def applyCmp(other: RedObject)(operator: => (Long, Long) => Boolean): RedBoolean = RedBoolean(other match
     {
-        case x: RedInt        => operator(value, x.value)
-        case x: RedFloat      => if (x.value % 1 == 0) operator(value, x.value.toLong) else false
-        case x: RedBoolean    => operator(value, if (x.value) 1 else 0)
-        case RedNull.Null => operator(value, 0)
-        case _                => throw new TypeError(s"${other.getClass.getName} is not comparable with Int")
+        case x: RedInt     => operator(value, x.value)
+        case x: RedFloat   => if (x.value % 1 == 0) operator(value, x.value.toLong) else false
+        case x: RedBoolean => operator(value, if (x.value) 1 else 0)
+        case RedNull.Null  => operator(value, 0)
+        case _             => throw new TypeError(s"${other.getClass.getName} is not comparable with Int")
     })
 
     private def applyInteger(other: RedObject)(op1: => (Long, Long) => Long)(op2: => (Long, Double) => Double): RedObject = other match
     {
-        case x: RedInt        => new RedInt(op1(value, x.value))
-        case x: RedFloat      => new RedFloat(op2(value, x.value))
-        case x: RedBoolean    => new RedInt(op1(value, if (x.value) 1 else 0))
-        case RedNull.Null => new RedInt(op1(value, 0))
-        case _                => throw new TypeError(s"${other.getClass.getName} canot be coerced with Int")
+        case x: RedInt     => RedInt(op1(value, x.value))
+        case x: RedFloat   => RedFloat(op2(value, x.value))
+        case x: RedBoolean => RedInt(op1(value, if (x.value) 1 else 0))
+        case RedNull.Null  => RedInt(op1(value, 0))
+        case _             => throw new TypeError(s"${other.getClass.getName} canot be coerced with Int")
     }
 
     override def __bool_or__(other: RedObject) : RedObject = RedBoolean((value != 0) || other.__bool__)
@@ -67,4 +68,10 @@ class RedInt(val value: Long) extends RedObject
     override def __inc_xor__(other: RedObject)   : RedObject = applyInteger(other)(_ ^ _)(throw new TypeError("Operator '^' between Int and Float not defined"))
     override def __inc_lshift__(other: RedObject): RedObject = applyInteger(other)(_ << _)(throw new TypeError("Operator '<<' between Int and Float not defined"))
     override def __inc_rshift__(other: RedObject): RedObject = applyInteger(other)(_ >> _)(throw new TypeError("Operator '>>' between Int and Float not defined"))
+}
+
+object RedInt
+{
+    val cache: Array[RedInt] = (-256 to 255) map (new RedInt(_)) toArray
+    def apply(value: Long): RedInt = if (value >= -256 && value <= 255) cache(value.toInt + 256) else new RedInt(value)
 }
