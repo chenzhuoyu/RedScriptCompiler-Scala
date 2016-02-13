@@ -34,14 +34,30 @@ class RedInt private(val value: Long) extends RedObject
         case _             => throw new TypeError(s"${other.getClass.getName} canot be coerced with Int")
     }
 
+    override def __eq__(other: RedObject) : RedObject = RedBoolean(other match
+    {
+        case x: RedInt     => value == x.value
+        case x: RedFloat   => if (x.value % 1 == 0) value == x.value.toLong else false
+        case x: RedBoolean => if (x.value) value == 1 else value == 0
+        case RedNull.Null  => value == 0
+        case _             => false
+    })
+
+    override def __neq__(other: RedObject): RedObject = RedBoolean(other match
+    {
+        case x: RedInt     => value != x.value
+        case x: RedFloat   => if (x.value % 1 == 0) value != x.value.toLong else true
+        case x: RedBoolean => if (x.value) value != 1 else value != 0
+        case RedNull.Null  => value != 0
+        case _             => true
+    })
+
     override def __bool_or__(other: RedObject) : RedObject = RedBoolean((value != 0) || other.__bool__)
     override def __bool_and__(other: RedObject): RedObject = RedBoolean((value != 0) && other.__bool__)
     override def __bool_xor__(other: RedObject): RedObject = RedBoolean((value == 0) == other.__bool__)
 
-    override def __eq__(other: RedObject) : RedObject = applyCmp(other)(_ == _)
-    override def __le__(other: RedObject) : RedObject = applyCmp(other)(_ < _)
+    override def __le__(other: RedObject) : RedObject = applyCmp(other)(_ <  _)
     override def __ge__(other: RedObject) : RedObject = applyCmp(other)(_ >  _)
-    override def __neq__(other: RedObject): RedObject = applyCmp(other)(_ != _)
     override def __leq__(other: RedObject): RedObject = applyCmp(other)(_ <= _)
     override def __geq__(other: RedObject): RedObject = applyCmp(other)(_ >= _)
 

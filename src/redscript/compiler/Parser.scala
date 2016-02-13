@@ -26,11 +26,10 @@ class Parser(val source: String) extends StdTokenParsers
 
     private lazy val parseIf        : Parser[NodeIf]        = ("if" ~> parseExpr <~ "then") ~ (parseStatement +) ~ (("else" ~> (parseStatement +)) ?) <~ "end"               ^^ { case expr ~ success ~ failed      => new NodeIf(expr, success, failed) }
     private lazy val parseFor       : Parser[NodeFor]       = ("for" ~> identifier <~ "in") ~ parseExpr ~ ("do" ~> (parseStatement +) <~ "end")                              ^^ { case name ~ expr ~ body           => new NodeFor(name, expr, body) }
-    private lazy val parseCase      : Parser[NodeCase]      = ("case" ~> rep1sep(parseExpr, ",") <~ ":") ~ (parseStatement *) <~ "end"                                       ^^ { case exprs ~ body                 => new NodeCase(exprs, body) }
     private lazy val parseClass     : Parser[NodeClass]     = "class" ~> identifier ~ (parseExtends ?) ~ (parseImpls ?) ~ (parseStatement *) <~ "end"                        ^^ { case name ~ parent ~ intfs ~ body => new NodeClass(name, parent, intfs, body) }
     private lazy val parseRaise     : Parser[NodeRaise]     = "raise" ~> parseExpr                                                                                           ^^ { case expr                         => new NodeRaise(expr) }
     private lazy val parseWhile     : Parser[NodeWhile]     = ("while" ~> parseExpr <~ "do") ~ ((parseStatement *) <~ "end")                                                 ^^ { case cond ~ body                  => new NodeWhile(cond, body) }
-    private lazy val parseSelect    : Parser[NodeSelect]    = ("select" ~> parseExpr <~ "in") ~ (parseCase *) ~ ((("default" ~ ":") ~> (parseStatement +) <~ "end") ?)       ^^ { case expr ~ cases ~ default       => new NodeSelect(expr, cases, default) }
+    private lazy val parseSelect    : Parser[NodeSelect]    = ("select" ~> parseExpr <~ "in") ~ (parseCase +) ~ (("default" ~> (parseStatement +)) ?) <~ "end"               ^^ { case expr ~ cases ~ default       => new NodeSelect(expr, cases, default) }
     private lazy val parseFunction  : Parser[NodeFunction]  = "func" ~> identifier ~ (("(" ~> rep1sep(parseArgument, ",") <~ ")") ?) ~ ("as" ~> (parseStatement *) <~ "end") ^^ { case name ~ args ~ body           => new NodeFunction(name, args, body) }
 
     private lazy val parseImpls     : Parser[Implements]    = "(" ~> rep1sep(attribute, ",") <~ ")"
@@ -43,6 +42,10 @@ class Parser(val source: String) extends StdTokenParsers
                  except.nonEmpty && except.count(_.except == null) >= 2)
         => new NodeTry(body, except, cleanup)
     } withFailureMessage "Invalid structure of exception rescure block"
+
+    private lazy val parseCase      : Parser[NodeCase]      = (parseEOL *) ~>
+        ( ("case" ~> rep1sep(parseExpr, ",") <~ "end")                       ^^ { case exprs        => new NodeCase(exprs, List()) }
+        | ("case" ~> rep1sep(parseExpr, ",") <~ "then") ~ (parseStatement +) ^^ { case exprs ~ body => new NodeCase(exprs, body) }) <~ (parseEOL *)
 
     private lazy val parseArgument  : Parser[NodeArgument]  = (">" ?) ~ identifier                                ^^ { case variant ~ name => new NodeArgument(name, variant.isDefined) }
     private lazy val parseException : Parser[NodeException] = rep1sep(attribute, "or") ~ (("as" ~> identifier) ?) ^^ { case names ~ name   => NodeException(names, name) }

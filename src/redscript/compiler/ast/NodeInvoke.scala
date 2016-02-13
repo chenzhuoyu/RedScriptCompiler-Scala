@@ -3,7 +3,7 @@ package redscript.compiler.ast
 import org.objectweb.asm.Opcodes
 import redscript.compiler.Assembler
 
-class NodeParam(val expr: NodeExpr, val expand: Boolean) {}
+class NodeParam(val expr: NodeExpr, val expand: Boolean)
 class NodeInvoke(val args: List[NodeParam]) extends Node
 {
     override def assemble(assembler: Assembler): Unit = args.find(_.expand) match

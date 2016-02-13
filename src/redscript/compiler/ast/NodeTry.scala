@@ -3,8 +3,8 @@ package redscript.compiler.ast
 import org.objectweb.asm.{Opcodes, Label}
 import redscript.compiler.Assembler
 
-case class NodeExcept(except: NodeException, body: List[NodeStatement]) {}
-case class NodeException(names: List[List[Identifier]], name: Option[Identifier]) {}
+case class NodeExcept(except: NodeException, body: List[NodeStatement])
+case class NodeException(names: List[List[Identifier]], name: Option[Identifier])
 
 class NodeTry(body: List[NodeStatement], excepts: List[NodeExcept], cleanup: Option[List[NodeStatement]]) extends Node
 {
