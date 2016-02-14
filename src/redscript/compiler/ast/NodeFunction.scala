@@ -3,10 +3,10 @@ package redscript.compiler.ast
 import org.objectweb.asm.{Label, Opcodes}
 import redscript.compiler.{Assembler, SyntaxError}
 
-private object Counter
+private object LambdaCounter
 {
     private var index: Int = 0
-    def nextIndex: Int =
+    def apply(): Int =
     {
         index += 1
         index
@@ -14,14 +14,22 @@ private object Counter
 }
 
 class NodeArgument(val name: Identifier, val variant: Boolean)
-class NodeFunction(name: Identifier, args: List[NodeArgument], body: List[NodeStatement]) extends Node
+class NodeFunction(name: Identifier, args: List[NodeArgument], body: List[NodeStatement], decorators: List[NodeExpr]) extends Node
 {
     override def assemble(assembler: Assembler): Unit =
     {
+        decorators foreach { decorator =>
+            decorator.assemble(assembler)
+            assembler.visitor.visitInsn(Opcodes.ICONST_1)
+            assembler.visitor.visitTypeInsn(Opcodes.ANEWARRAY, "redscript/lang/RedObject")
+            assembler.visitor.visitInsn(Opcodes.DUP)
+            assembler.visitor.visitInsn(Opcodes.ICONST_0)
+        }
+
         val label = new Label
         val owner = assembler.name
         val isInline = !assembler.classes.top.method.isRoot
-        val funcName = if (name != null) name.value else s"lambda$$${Counter.nextIndex}"
+        val funcName = if (name != null) name.value else s"lambda$$${LambdaCounter()}"
         val methodClass = assembler.beginInnerClass(s"func$$$funcName", "redscript/lang/RedFunction", Array(), isInlineClass = isInline)
 
         methodClass.beginMethod("__invoke__", "([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", isStatic = false)
@@ -150,6 +158,11 @@ class NodeFunction(name: Identifier, args: List[NodeArgument], body: List[NodeSt
                 "<init>",
                 s"(L$owner;${"Lredscript/lang/RedObject;" * methodClass.freeVariables.length})V",
                 false)
+
+            decorators foreach { _ =>
+                assembler.visitor.visitInsn(Opcodes.AASTORE)
+                assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__invoke__", "([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", false)
+            }
 
             if (name != null)
             {
