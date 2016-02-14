@@ -130,8 +130,8 @@ class Parser(val source: String) extends StdTokenParsers
     private lazy val parseMap       : Parser[NodeMap]       = "{" ~> repsep(parseRow , ",") <~ "}"    ^^ (new NodeMap(_))
     private lazy val parseArray     : Parser[NodeArray]     = "[" ~> repsep(parseExpr, ",") <~ "]"    ^^ (new NodeArray(_))
 
-    private lazy val parsePair      : Parser[NodePair]      = identifier ~ ("->" ~> parseExpr)                                                               ^^ { case key   ~ value   => new NodePair(key, value) }
-    private lazy val parseLambda    : Parser[NodeFunction]  = "$" ~> (("(" ~> rep1sep(parseArgument, ",") <~ ")") ?) ~ ("->" ~> (parseStatement *) <~ "end") ^^ { case args ~ body     => new NodeFunction(null, args.getOrElse(List()), body) }
+    private lazy val parsePair      : Parser[NodePair]      = identifier ~ ("->" ~> parseExpr)                                                          ^^ { case key   ~ value   => new NodePair(key, value) }
+    private lazy val parseLambda    : Parser[NodeFunction]  = "$" ~> ("(" ~> repsep(parseArgument, ",") <~ ")") ~ ("->" ~> (parseStatement *) <~ "end") ^^ { case args ~ body     => new NodeFunction(null, args, body) }
 
     private lazy val parseTuple     : Parser[NodeTuple]     =
         ( "(" ~> ")"                                                ^^ { case _               => new NodeTuple(List()) }

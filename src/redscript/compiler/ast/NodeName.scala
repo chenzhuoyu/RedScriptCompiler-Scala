@@ -27,13 +27,39 @@ class NodeName(val name: Identifier) extends Node
                 case Assembler.NoSuchField => Builtins.builtins.get(ident) match
                 {
                     case Some(x) => assembler.visitor.visitMethodInsn(Opcodes.INVOKESTATIC, "redscript/lang/Builtins", x, "()Lredscript/lang/RedObject;", false)
-                    case None if  assembler.classes.top.method.isRoot => throw new SyntaxError(s"Identifier '$ident' not found", name.pos.line, name.pos.column)
-                    case None if !assembler.classes.top.method.isRoot =>
-                        if (assembler.markFreeVariable(name))
-                            assembler.classes.top.makeSyntheticField(s"$$FV_$ident")
+                    case None    =>
+                        if (assembler.classes.length < 2)
+                            throw new SyntaxError(s"Identifier '$ident' not found", name.pos.line, name.pos.column)
 
-                        assembler.visitor.visitVarInsn(Opcodes.ALOAD, 0)
-                        assembler.visitor.visitFieldInsn(Opcodes.GETFIELD, assembler.name, s"$$FV_$ident", "Lredscript/lang/RedObject;")
+                        if (!(assembler.classes exists (_.getField(ident) == Assembler.GetStatic)))
+                        {
+                            if (assembler.markFreeVariable(name))
+                                assembler.classes.top.makeSyntheticField(s"freevar$$$ident")
+
+                            assembler.visitor.visitVarInsn(Opcodes.ALOAD, 0)
+                            assembler.visitor.visitFieldInsn(Opcodes.GETFIELD, assembler.name, s"freevar$$$ident", "Lredscript/lang/RedObject;")
+                        }
+                        else
+                        {
+                            var classDesc = ""
+                            var className = ""
+                            var description = "redscript/lang/RedObject"
+
+                            assembler.classes.reverse foreach { nested =>
+                                nested.getField(ident) match
+                                {
+                                    case Assembler.GetStatic   =>
+                                        classDesc = description
+                                        className = nested.name
+                                        description = nested.name
+
+                                    case Assembler.GetVirtual  => description = nested.name
+                                    case Assembler.NoSuchField => description = nested.name
+                                }
+                            }
+
+                            assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, className, ident, s"L$classDesc;")
+                        }
                 }
             }
         }

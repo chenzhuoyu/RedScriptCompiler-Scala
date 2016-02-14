@@ -1,6 +1,6 @@
 package redscript.compiler.ast
 
-import org.objectweb.asm.{Opcodes, Label}
+import org.objectweb.asm.{Label, Opcodes}
 import redscript.compiler.Assembler
 
 case class NodeExcept(except: NodeException, body: List[NodeStatement])

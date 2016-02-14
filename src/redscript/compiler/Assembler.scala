@@ -3,7 +3,7 @@ package redscript.compiler
 import org.objectweb.asm._
 import org.objectweb.asm.commons.LocalVariablesSorter
 import redscript.compiler.ast.{Identifier, Node}
-import redscript.lang.{SemanticError, RedObject}
+import redscript.lang.{RedObject, SemanticError}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -213,7 +213,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
             case (fv, index) =>
                 constructor.visitVarInsn(Opcodes.ALOAD, 0)
                 constructor.visitVarInsn(Opcodes.ALOAD, index + 2)
-                constructor.visitFieldInsn(Opcodes.PUTFIELD, cls.name, s"$$FV_${fv.value}", "Lredscript/lang/RedObject;")
+                constructor.visitFieldInsn(Opcodes.PUTFIELD, cls.name, s"freevar$$${fv.value}", "Lredscript/lang/RedObject;")
         }
 
         /* super constructor */

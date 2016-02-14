@@ -1,6 +1,6 @@
 package redscript.compiler.ast
 
-import org.objectweb.asm.{Type, Opcodes}
+import org.objectweb.asm.{Opcodes, Type}
 import redscript.compiler.Assembler
 import redscript.lang.SemanticError
 
