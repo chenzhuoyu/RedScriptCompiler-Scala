@@ -6,17 +6,17 @@ import redscript.lang.RedObject
 object Main extends App
 {
     val src =
-        """ a = 100
-          | func test(b) as
+        """
+          | func test(a) as
           |     func bar as
-          |         println(a, b)
+          |         func baz as
+          |             return a
+          |         end
+          |         return baz
           |     end
           |     return bar
           | end
-          | f = test(10)
-          | f()
-          | a = 200
-          | f()
+          | println(test(200)()())
         """.stripMargin
 
     val parser = new Parser(src)

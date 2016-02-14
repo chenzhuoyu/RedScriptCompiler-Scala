@@ -50,7 +50,7 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
         def makeSyntheticField(field: String) = if (!fields.contains(field))
         {
             fields(field) = false
-            writer.visitField(Opcodes.ACC_SYNTHETIC, field, "Lredscript/lang/RedObject;", null, null).visitEnd()
+            writer.visitField(Opcodes.ACC_FINAL | Opcodes.ACC_SYNTHETIC, field, "Lredscript/lang/RedObject;", null, null).visitEnd()
         }
 
         def findImport(name: String) = imports.get(name)
