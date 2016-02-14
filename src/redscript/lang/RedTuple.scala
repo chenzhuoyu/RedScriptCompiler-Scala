@@ -1,6 +1,6 @@
 package redscript.lang
 
-class RedTuple(val items: Array[RedObject]) extends RedObject
+class RedTuple(val items: Array[RedObject]) extends RedObject with Iterable[RedObject]
 {
     private class Iterator(tuple: RedTuple) extends RedObject
     {
@@ -8,14 +8,16 @@ class RedTuple(val items: Array[RedObject]) extends RedObject
         override def __next__ : RedObject = if (iter.hasNext) iter.next else throw new StopIteration
     }
 
+    override def iterator: scala.Iterator[RedObject] = items.iterator
+
     override def __len__  : Long      = items.length
     override def __bool__ : Boolean   = items.nonEmpty
 
     override def __iter__ : RedObject = new Iterator(this)
     override def __contains__(item: RedObject): Boolean = items.contains(item)
 
-    override def __str__  : String = s"(${items map (_.__repr__) mkString ", "})"
-    override def __repr__ : String = s"(${items map (_.__repr__) mkString ", "})"
+    override def __str__  : String = if (items.length == 1) s"(${items.head.__repr__},)" else s"(${items map (_.__repr__) mkString ", "})"
+    override def __repr__ : String = if (items.length == 1) s"(${items.head.__repr__},)" else s"(${items map (_.__repr__) mkString ", "})"
 
     override def __hash__ : Int = items.isEmpty match
     {

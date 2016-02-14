@@ -7,9 +7,16 @@ class NodeLValue(val value: NodeValue) extends Node
 {
     override def assemble(assembler: Assembler): Unit = value.value match
     {
-        case name: NodeName if value.modifiers.isEmpty =>
+        case name: NodeName if value.modifiers.isEmpty => if (!assembler.classes.top.method.isRoot)
+        {
             val local = assembler.makeLocal(name.name.value)
             assembler.visitor.visitVarInsn(Opcodes.ASTORE, local)
+        }
+        else
+        {
+            assembler.makeField(name.name.value, forceStatic = true)
+            assembler.visitor.visitFieldInsn(Opcodes.PUTSTATIC, assembler.name, name.name.value, "Lredscript/lang/RedObject;")
+        }
 
         case other =>
             other.assemble(assembler)

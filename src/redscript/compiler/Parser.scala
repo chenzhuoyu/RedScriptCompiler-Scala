@@ -30,7 +30,6 @@ class Parser(val source: String) extends StdTokenParsers
     private lazy val parseRaise     : Parser[NodeRaise]     = "raise" ~> parseExpr                                                                                           ^^ { case expr                         => new NodeRaise(expr) }
     private lazy val parseWhile     : Parser[NodeWhile]     = ("while" ~> parseExpr <~ "do") ~ ((parseStatement *) <~ "end")                                                 ^^ { case cond ~ body                  => new NodeWhile(cond, body) }
     private lazy val parseSelect    : Parser[NodeSelect]    = ("select" ~> parseExpr <~ "in") ~ (parseCase +) ~ (("default" ~> (parseStatement +)) ?) <~ "end"               ^^ { case expr ~ cases ~ default       => new NodeSelect(expr, cases, default) }
-    private lazy val parseFunction  : Parser[NodeFunction]  = "func" ~> identifier ~ (("(" ~> rep1sep(parseArgument, ",") <~ ")") ?) ~ ("as" ~> (parseStatement *) <~ "end") ^^ { case name ~ args ~ body           => new NodeFunction(name, args, body) }
 
     private lazy val parseImpls     : Parser[Implements]    = "(" ~> rep1sep(attribute, ",") <~ ")"
     private lazy val parseExtends   : Parser[Names]         = "extends" ~> attribute
@@ -42,6 +41,19 @@ class Parser(val source: String) extends StdTokenParsers
                  except.nonEmpty && except.count(_.except == null) >= 2)
         => new NodeTry(body, except, cleanup)
     } withFailureMessage "Invalid structure of exception rescure block"
+
+    private lazy val parseFunction  : Parser[NodeFunction]  = "func" ~> identifier ~ (("(" ~> rep1sep(parseArgument, ",") <~ ")") ?) ~ ("as" ~> (parseStatement *) <~ "end") ^? {
+        case name ~ args ~ body if (args match
+        {
+            case None => true
+            case Some(v) => v.count(_.variant) match
+            {
+                case 0 => true
+                case 1 => v.last.variant
+                case _ => false
+            }
+        }) => new NodeFunction(name, args.getOrElse(List()), body)
+    } withFailureMessage "Variant argument can only have one at the end of argument list"
 
     private lazy val parseCase      : Parser[NodeCase]      = (parseEOL *) ~>
         ( ("case" ~> rep1sep(parseExpr, ",") <~ "end")                       ^^ { case exprs        => new NodeCase(exprs, List()) }
@@ -119,7 +131,7 @@ class Parser(val source: String) extends StdTokenParsers
     private lazy val parseArray     : Parser[NodeArray]     = "[" ~> repsep(parseExpr, ",") <~ "]"    ^^ (new NodeArray(_))
 
     private lazy val parsePair      : Parser[NodePair]      = identifier ~ ("->" ~> parseExpr)                                                               ^^ { case key   ~ value   => new NodePair(key, value) }
-    private lazy val parseLambda    : Parser[NodeFunction]  = "$" ~> (("(" ~> rep1sep(parseArgument, ",") <~ ")") ?) ~ ("->" ~> (parseStatement *) <~ "end") ^^ { case args ~ body     => new NodeFunction(null, args, body) }
+    private lazy val parseLambda    : Parser[NodeFunction]  = "$" ~> (("(" ~> rep1sep(parseArgument, ",") <~ ")") ?) ~ ("->" ~> (parseStatement *) <~ "end") ^^ { case args ~ body     => new NodeFunction(null, args.getOrElse(List()), body) }
 
     private lazy val parseTuple     : Parser[NodeTuple]     =
         ( "(" ~> ")"                                                ^^ { case _               => new NodeTuple(List()) }

@@ -6,15 +6,10 @@ import redscript.lang.RedObject
 object Main extends App
 {
     val src =
-        """ func foo as
-          |     println('in func')
-          |     func nest as
-          |         println('nested')
-          |     end
-          |     return nest
+        """ a = 1
+          | func foo as
+          |     return a
           | end
-          | println('hello, world')
-          | println(foo()())
         """.stripMargin
 
     val parser = new Parser(src)
@@ -22,8 +17,10 @@ object Main extends App
 
     Assembler.assemble("Test", astList, (name: String, bytecodes: Array[Byte]) =>
     {
-        println(s"out/$name.class ${bytecodes.length}")
+        System.err.println(s"Assembling out/$name.class, size ${bytecodes.length}")
         new java.io.FileOutputStream(new java.io.File(s"out/$name.class")).write(bytecodes)
-        Assembler.injectClass(name, bytecodes).getConstructor(classOf[Array[RedObject]]).newInstance(Array[RedObject]())
+        Assembler.injectClass(name, bytecodes)
     })
+
+    Class.forName("Test").getConstructor(classOf[Array[RedObject]]).newInstance(Array[RedObject]())
 }

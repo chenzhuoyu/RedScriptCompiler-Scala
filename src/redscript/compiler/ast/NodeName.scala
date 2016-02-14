@@ -27,7 +27,13 @@ class NodeName(val name: Identifier) extends Node
                 case Assembler.NoSuchField => Builtins.builtins.get(ident) match
                 {
                     case Some(x) => assembler.visitor.visitMethodInsn(Opcodes.INVOKESTATIC, "redscript/lang/Builtins", x, "()Lredscript/lang/RedObject;", false)
-                    case None    => throw new SyntaxError(s"Identifier '$ident' not found", name.pos.line, name.pos.column)
+                    case None if  assembler.classes.top.method.isRoot => throw new SyntaxError(s"Identifier '$ident' not found", name.pos.line, name.pos.column)
+                    case None if !assembler.classes.top.method.isRoot =>
+                        if (assembler.markFreeVariable(name))
+                            assembler.classes.top.makeSyntheticField(s"$$FV_$ident")
+
+                        assembler.visitor.visitVarInsn(Opcodes.ALOAD, 0)
+                        assembler.visitor.visitFieldInsn(Opcodes.GETFIELD, assembler.name, s"$$FV_$ident", "Lredscript/lang/RedObject;")
                 }
             }
         }

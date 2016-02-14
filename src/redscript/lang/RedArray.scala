@@ -2,13 +2,15 @@ package redscript.lang
 
 import scala.collection.mutable
 
-class RedArray(val items: mutable.ArrayBuffer[RedObject]) extends RedObject
+class RedArray(val items: mutable.ArrayBuffer[RedObject]) extends RedObject with Iterable[RedObject]
 {
     private class Iterator(array: RedArray) extends RedObject
     {
         private val iter = array.items.iterator
         override def __next__ : RedObject = if (iter.hasNext) iter.next else throw new StopIteration
     }
+
+    override def iterator: scala.Iterator[RedObject] = items.iterator
 
     override def __len__  : Long      = items.length
     override def __bool__ : Boolean   = items.nonEmpty
