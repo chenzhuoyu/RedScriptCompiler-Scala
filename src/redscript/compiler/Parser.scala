@@ -50,18 +50,18 @@ class Parser(val source: String) extends StdTokenParsers
         case args if (args match
         {
             case None => true
-            case Some(v) => v.count(_.variant) match
+            case Some(v) => (v.map(_.name).distinct.length == v.length) && (v.count(_.variant) match
             {
                 case 0 => true
                 case 1 => v.last.variant
                 case _ => false
-            }
+            })
         }) => args match
         {
             case None       => List()
             case Some(argv) => argv
         }
-    } withFailureMessage "Variant argument can only have one at the end of argument list"
+    } withFailureMessage "Invalid formal parameters"
 
     private lazy val parseCase      : Parser[NodeCase]      = (parseEOL *) ~>
         ( ("case" ~> rep1sep(parseExpr, ",") <~ "end")                       ^^ { case exprs        => new NodeCase(exprs, List()) }

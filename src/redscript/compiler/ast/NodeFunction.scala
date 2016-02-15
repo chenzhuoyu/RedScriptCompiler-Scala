@@ -77,6 +77,15 @@ class NodeFunction(name: Identifier, args: List[NodeArgument], body: List[NodeSt
                         assembler.visitor.visitVarInsn(Opcodes.ASTORE, local)
                 }
             }
+            else if (args.length == 1)
+            {
+                val local = assembler.makeLocal(args.head.name.value)
+                assembler.visitor.visitTypeInsn(Opcodes.NEW, "redscript/lang/RedTuple")
+                assembler.visitor.visitInsn(Opcodes.DUP)
+                assembler.visitor.visitVarInsn(Opcodes.ALOAD, 1)
+                assembler.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, "redscript/lang/RedTuple", "<init>", "([Lredscript/lang/RedObject;)V", false)
+                assembler.visitor.visitVarInsn(Opcodes.ASTORE, local)
+            }
             else
             {
                 (args dropRight 1).zipWithIndex foreach {
@@ -173,15 +182,69 @@ class NodeFunction(name: Identifier, args: List[NodeArgument], body: List[NodeSt
 
         if (name != null)
         {
-//            assembler.classes.top.beginMethod(name.value, s"(${"Lredscript/lang/RedObject;" * args.length})Lredscript/lang/RedObject;", isStatic = false)
-//            assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, owner, name.value, "Lredscript/lang/RedObject;")
-//            assembler.visitor.visitLdcInsn(args.length)
-//            assembler.visitor.visitTypeInsn(Opcodes.ANEWARRAY, "redscript/lang/RedObject")
-//            assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__invoke__", "([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", false)
-//            assembler.visitor.visitInsn(Opcodes.ARETURN)
-//            assembler.visitor.visitMaxs(0, 0)
-//            assembler.visitor.visitEnd()
-//            assembler.classes.top.endMethod
+            if (args.isEmpty)
+            {
+                assembler.classes.top.beginMethod(name.value, "()Lredscript/lang/RedObject;", isStatic = !isInline)
+                assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, owner, name.value, "Lredscript/lang/RedObject;")
+                assembler.visitor.visitInsn(Opcodes.ICONST_0)
+                assembler.visitor.visitTypeInsn(Opcodes.ANEWARRAY, "redscript/lang/RedObject")
+            }
+            else if (!args.last.variant)
+            {
+                assembler.classes.top.beginMethod(name.value, s"(${"Lredscript/lang/RedObject;" * args.length})Lredscript/lang/RedObject;", isStatic = !isInline)
+                assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, owner, name.value, "Lredscript/lang/RedObject;")
+                assembler.visitor.visitLdcInsn(args.length)
+                assembler.visitor.visitTypeInsn(Opcodes.ANEWARRAY, "redscript/lang/RedObject")
+
+                args.zipWithIndex foreach {
+                    case (arg, index) =>
+                        assembler.visitor.visitInsn(Opcodes.DUP)
+                        assembler.visitor.visitLdcInsn(index)
+                        assembler.visitor.visitVarInsn(Opcodes.ALOAD, if (isInline) index + 1 else index)
+                        assembler.visitor.visitInsn(Opcodes.AASTORE)
+                }
+            }
+            else if (args.length == 1)
+            {
+                assembler.classes.top.beginMethod(name.value, s"([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", isStatic = !isInline)
+                assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, owner, name.value, "Lredscript/lang/RedObject;")
+                assembler.visitor.visitVarInsn(Opcodes.ALOAD, if (isInline) 1 else 0)
+            }
+            else
+            {
+                assembler.classes.top.beginMethod(name.value, s"(${"Lredscript/lang/RedObject;" * (args.length - 1)}[Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", isStatic = !isInline)
+                assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, owner, name.value, "Lredscript/lang/RedObject;")
+
+                assembler.visitor.visitInsn(Opcodes.ICONST_0)
+                assembler.visitor.visitVarInsn(Opcodes.ALOAD, if (isInline) args.length else args.length - 1)
+                assembler.visitor.visitInsn(Opcodes.DUP_X1)
+                assembler.visitor.visitInsn(Opcodes.ARRAYLENGTH)
+                assembler.visitor.visitInsn(Opcodes.DUP)
+                assembler.visitor.visitLdcInsn(args.length - 1)
+                assembler.visitor.visitInsn(Opcodes.IADD)
+                assembler.visitor.visitTypeInsn(Opcodes.ANEWARRAY, "redscript/lang/RedObject")
+
+                args.zipWithIndex dropRight 1 foreach {
+                    case (arg, index) =>
+                        assembler.visitor.visitInsn(Opcodes.DUP)
+                        assembler.visitor.visitLdcInsn(index)
+                        assembler.visitor.visitVarInsn(Opcodes.ALOAD, if (isInline) index + 1 else index)
+                        assembler.visitor.visitInsn(Opcodes.AASTORE)
+                }
+
+                assembler.visitor.visitInsn(Opcodes.SWAP)
+                assembler.visitor.visitInsn(Opcodes.DUP2_X2)
+                assembler.visitor.visitLdcInsn(args.length - 1)
+                assembler.visitor.visitInsn(Opcodes.SWAP)
+                assembler.visitor.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/System", "arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V", false)
+                assembler.visitor.visitInsn(Opcodes.POP)
+            }
+
+            assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__invoke__", "([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", false)
+            assembler.visitor.visitInsn(Opcodes.ARETURN)
+            assembler.visitor.visitMaxs(0, 0)
+            assembler.visitor.visitEnd()
+            assembler.classes.top.endMethod
         }
     }
 }
