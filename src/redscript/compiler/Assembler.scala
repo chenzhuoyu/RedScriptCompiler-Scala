@@ -10,11 +10,106 @@ import scala.collection.mutable.ArrayBuffer
 
 class Assembler private(callback: (String, Array[Byte]) => Unit)
 {
-    class Class(val name: String, val owner: Assembler, val writer: ClassWriter, val interfaces: Array[java.lang.Class[_]])
+    val classes = mutable.Stack[Assembler.Class]()
+
+    def name: String = classes.top.name
+    def writer: ClassWriter = classes.top.writer
+    def visitor: LocalVariablesSorter = classes.top.method.visitor
+
+    def getLocal(local: String) = classes.top.method.getLocal(local)
+    def makeLocal(local: String) = classes.top.method.makeLocal(local)
+
+    def getField(field: String) = classes.top.getField(field)
+    def makeField(field: String, forceStatic: Boolean = false) = classes.top.makeField(field, forceStatic)
+
+    def findImport(name: String) = classes.top.findImport(name)
+    def cacheImport(name: String, className: String) = classes.top.cacheImport(name, className)
+
+    def freeVariables = classes.top.freeVariables
+    def markFreeVariable(varName: Identifier) = classes.top.markFreeVariable(varName)
+
+    def makeClass(className: String, superClassName: String, interfaces: Array[String], hasOwnerClass: Boolean)(assembleBody: (Assembler.Class) => Unit) =
+    {
+        val fname = if (hasOwnerClass) s"$name$$$className" else className
+        val newClass = new Assembler.Class(fname, superClassName, this, new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES))
+
+        if (hasOwnerClass)
+        {
+            writer.visitInnerClass(fname, name, className, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER | Opcodes.ACC_STATIC)
+            newClass.writer.visitOuterClass(name, null, null)
+        }
+
+        newClass.writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, fname, null, superClassName, interfaces)
+        classes.push(newClass)
+
+        /* inner classes doesn't need default constructor */
+        if (!hasOwnerClass)
+        {
+            newClass.makeMethod("<init>", "()V", isStatic = false)
+            {
+                visitor.visitVarInsn(Opcodes.ALOAD, 0)
+                visitor.visitInsn(Opcodes.ICONST_0)
+                visitor.visitTypeInsn(Opcodes.ANEWARRAY, "redscript/lang/RedObject")
+                visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, fname, "<init>", "([Lredscript/lang/RedObject;)V", false)
+                visitor.visitInsn(Opcodes.RETURN)
+            }
+        }
+
+        assembleBody(newClass)
+        callback(newClass.name, newClass.writer.toByteArray)
+        classes.pop
+    }
+
+    def makeInnerClass(className: String, superClassName: String, interfaces: Array[String])(assembleBody: (Assembler.Class) => Unit) =
+    {
+        val owner = name
+        val fname = s"$owner$$$className"
+        val newClass = new Assembler.Class(fname, superClassName, this, new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES))
+
+        /* basic class informations */
+        writer.visitInnerClass(fname, null, null, Opcodes.ACC_SUPER)
+        newClass.writer.visit(Opcodes.V1_8, Opcodes.ACC_SUPER, fname, null, superClassName, interfaces)
+        newClass.writer.visitOuterClass(owner, classes.top.method.name, classes.top.method.desc)
+
+        /* assemble body */
+        classes.push(newClass)
+        assembleBody(newClass)
+
+        /* constructor of the inner class */
+        newClass.makeMethod("<init>", s"(L$owner;${"Lredscript/lang/RedObject;" * newClass.freeVariables.length})V", isStatic = false)
+        {
+            newClass.method.visitor.visitCode()
+            newClass.method.visitor.visitVarInsn(Opcodes.ALOAD, 0)
+            newClass.method.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, newClass.superClass, "<init>", "()V", false)
+
+            /* free variables passed as closure */
+            newClass.freeVariables.zipWithIndex foreach{
+                case (fv, index) =>
+                    visitor.visitVarInsn(Opcodes.ALOAD, 0)
+                    visitor.visitVarInsn(Opcodes.ALOAD, index + 2)
+                    visitor.visitFieldInsn(Opcodes.PUTFIELD, newClass.name, s"freevar$$${fv.value}", "Lredscript/lang/RedObject;")
+            }
+
+            /* method must have a RETURN */
+            visitor.visitInsn(Opcodes.RETURN)
+        }
+
+        callback(newClass.name, newClass.writer.toByteArray)
+        classes.pop
+    }
+}
+
+object Assembler
+{
+    case object GetStatic
+    case object GetVirtual
+    case object NoSuchField
+
+    class Class(val name: String, val superClass: String, val owner: Assembler, val writer: ClassWriter)
     {
         val fields = mutable.Map[String, Boolean]()
         val imports = mutable.Map[String, String]()
-        val methods = mutable.Map[String, Method]()
+        val methods = mutable.Map[(String, String), Method]()
         private val frees = ArrayBuffer[Identifier]()
         private val current = mutable.Stack[Method]()
 
@@ -22,16 +117,23 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
         def markFreeVariable(varName: Identifier): Boolean = frees.contains(varName) || { frees.append(varName); true }
 
         def method: Method = current.top
-        def endMethod: Method = current.pop
-        def beginMethod(name: String, desc: String, isStatic: Boolean) = methods.get(name) match
+        def makeMethod(name: String, desc: String, isStatic: Boolean)(body: => Unit) =
         {
-            case Some(_) => throw new SemanticError(s"Duplicate method name `$name`")
-            case None    =>
-                val mv = writer.visitMethod(Opcodes.ACC_PUBLIC | (if (isStatic) Opcodes.ACC_STATIC else 0), name, desc, desc, null)
-                val method = new Method(name, desc, isStatic, this, new LocalVariablesSorter(Opcodes.ACC_PUBLIC | (if (isStatic) Opcodes.ACC_STATIC else 0), desc, mv))
+            methods.get((name, desc)) match
+            {
+                case Some(_) => throw new SemanticError(s"Duplicate method name `$name`")
+                case None    =>
+                    val mv = writer.visitMethod(Opcodes.ACC_PUBLIC | (if (isStatic) Opcodes.ACC_STATIC else 0), name, desc, desc, null)
+                    val method = new Method(name, desc, isStatic, this, new LocalVariablesSorter(Opcodes.ACC_PUBLIC | (if (isStatic) Opcodes.ACC_STATIC else 0), desc, mv))
 
-                methods(name) = method
-                current.push(method)
+                    current.push(method)
+                    methods((name, desc)) = method
+            }
+
+            body
+            method.visitor.visitMaxs(0, 0)
+            method.visitor.visitEnd()
+            current.pop
         }
 
         def getField(field: String) = fields.get(field) match
@@ -55,14 +157,6 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
 
         def findImport(name: String) = imports.get(name)
         def cacheImport(name: String, className: String) = imports(name) = className
-
-        def assemble(nodes: List[Node]): Unit =
-        {
-            beginMethod("<clinit>", "()V", isStatic = true)
-            method.assemble(nodes)
-            endMethod
-            callback(name, writer.toByteArray)
-        }
     }
 
     class Method(val name: String, val desc: String, val isStatic: Boolean, val owner: Class, val visitor: LocalVariablesSorter)
@@ -128,150 +222,32 @@ class Assembler private(callback: (String, Array[Byte]) => Unit)
                     visitor.visitMethodInsn(Opcodes.INVOKESTATIC, "redscript/lang/RedNull", "Null", "()Lredscript/lang/RedNull;", false)
                     visitor.visitInsn(Opcodes.ARETURN)
             }
-
-            /* stack informations */
-            visitor.visitMaxs(0, 0)
-            visitor.visitEnd()
         }
     }
-
-    val classes = mutable.Stack[Class]()
-
-    def name: String = classes.top.name
-    def writer: ClassWriter = classes.top.writer
-    def visitor: LocalVariablesSorter = classes.top.method.visitor
-
-    def getLocal(local: String) = classes.top.method.getLocal(local)
-    def makeLocal(local: String) = classes.top.method.makeLocal(local)
-
-    def getField(field: String) = classes.top.getField(field)
-    def makeField(field: String, forceStatic: Boolean = false) = classes.top.makeField(field, forceStatic)
-
-    def findImport(name: String) = classes.top.findImport(name)
-    def cacheImport(name: String, className: String) = classes.top.cacheImport(name, className)
-
-    def freeVariables = classes.top.freeVariables
-    def markFreeVariable(varName: Identifier) = classes.top.markFreeVariable(varName)
-
-    def endClass = classes.pop
-    def beginClass(className: String, superClassName: String, interfaces: Array[String]) =
-    {
-        val intfs = interfaces map Class.forName
-        val newClass = new Class(className, this, new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES), intfs)
-
-        newClass.writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, className, null, superClassName, interfaces)
-        classes.push(newClass)
-
-        /* default constructor of this class */
-        val default = newClass.writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
-
-        /* forward arguments to `__init__` */
-        default.visitCode()
-        default.visitVarInsn(Opcodes.ALOAD, 0)
-        default.visitInsn(Opcodes.ICONST_0)
-        default.visitTypeInsn(Opcodes.ANEWARRAY, "redscript/lang/RedObject")
-        default.visitMethodInsn(Opcodes.INVOKESPECIAL, className, "<init>", "([Lredscript/lang/RedObject;)V", false)
-        default.visitInsn(Opcodes.RETURN)
-        default.visitMaxs(0, 0)
-        default.visitEnd()
-
-        /* constructor of the main class */
-        val constructor = newClass.writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "([Lredscript/lang/RedObject;)V", null, null)
-
-        /* forward arguments to `__init__` */
-        constructor.visitCode()
-        constructor.visitVarInsn(Opcodes.ALOAD, 0)
-        constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, superClassName, "<init>", "()V", false)
-        constructor.visitVarInsn(Opcodes.ALOAD, 0)
-        constructor.visitVarInsn(Opcodes.ALOAD, 1)
-        constructor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, className, "__init__", "([Lredscript/lang/RedObject;)V", false)
-        constructor.visitInsn(Opcodes.RETURN)
-        constructor.visitMaxs(0, 0)
-        constructor.visitEnd()
-        newClass
-    }
-
-    def endInnerClass(superClassName: String) =
-    {
-        /* constructor of the main class */
-        val cls = endClass
-        val owner = classes.top.name
-        val constructor = cls.writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", s"(L$owner;${"Lredscript/lang/RedObject;" * cls.freeVariables.length})V", null, null)
-
-        /* field for owner instance */
-        cls.fields("$owner") = false
-        cls.writer.visitField(Opcodes.ACC_FINAL | Opcodes.ACC_SYNTHETIC, "$owner", s"L$owner;", null, null).visitEnd()
-
-        /* store owner instance */
-        constructor.visitCode()
-        constructor.visitVarInsn(Opcodes.ALOAD, 0)
-        constructor.visitVarInsn(Opcodes.ALOAD, 1)
-        constructor.visitFieldInsn(Opcodes.PUTFIELD, cls.name, "$owner", s"L$owner;")
-
-        /* free variables passed as closure */
-        cls.freeVariables.zipWithIndex foreach {
-            case (fv, index) =>
-                constructor.visitVarInsn(Opcodes.ALOAD, 0)
-                constructor.visitVarInsn(Opcodes.ALOAD, index + 2)
-                constructor.visitFieldInsn(Opcodes.PUTFIELD, cls.name, s"freevar$$${fv.value}", "Lredscript/lang/RedObject;")
-        }
-
-        /* super constructor */
-        constructor.visitVarInsn(Opcodes.ALOAD, 0)
-        constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, superClassName, "<init>", "()V", false)
-        constructor.visitInsn(Opcodes.RETURN)
-        constructor.visitMaxs(0, 0)
-        constructor.visitEnd()
-        cls.assemble(List())
-    }
-
-    def beginInnerClass(className: String, superClassName: String, interfaces: Array[String], isInlineClass: Boolean) =
-    {
-        val owner = classes.top.name
-        val intfs = interfaces map Class.forName
-        val access = if (isInlineClass) Opcodes.ACC_SUPER else Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER
-
-        val fullName = s"$owner$$$className"
-        val newClass = new Class(fullName, this, new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES), intfs)
-
-        if (!isInlineClass)
-        {
-            newClass.writer.visitOuterClass(owner, null, null)
-            classes.top.writer.visitInnerClass(fullName, owner, className, access)
-        }
-        else
-        {
-            newClass.writer.visitOuterClass(owner, classes.top.method.name, classes.top.method.desc)
-            classes.top.writer.visitInnerClass(fullName, null, null, access)
-        }
-
-        newClass.writer.visit(Opcodes.V1_8, access, fullName, null, superClassName, interfaces)
-        classes.push(newClass)
-        newClass
-    }
-}
-
-object Assembler
-{
-    case object GetStatic
-    case object GetVirtual
-    case object NoSuchField
 
     def assemble(mainClass: String, nodes: List[Node], callback: (String, Array[Byte]) => Unit): Unit =
     {
-        val asm = new Assembler(callback)
-        val cls = asm.beginClass(mainClass, "redscript/lang/RedObject", Array())
-
-        cls.assemble(nodes)
-        asm.endClass
+        new Assembler(callback).makeClass(mainClass, "redscript/lang/RedObject", Array(), hasOwnerClass = false) { newClass =>
+        {
+            newClass.makeMethod("<clinit>", "()V", isStatic = true)(newClass.method.assemble(nodes))
+            newClass.makeMethod("<init>", "([Lredscript/lang/RedObject;)V", isStatic = false)
+            {
+                newClass.method.visitor.visitVarInsn(Opcodes.ALOAD, 0)
+                newClass.method.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, "redscript/lang/RedObject", "<init>", "()V", false)
+                newClass.method.visitor.visitVarInsn(Opcodes.ALOAD, 0)
+                newClass.method.visitor.visitVarInsn(Opcodes.ALOAD, 1)
+                newClass.method.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, "redscript/lang/RedObject", "__init__", "([Lredscript/lang/RedObject;)V", false)
+                newClass.method.visitor.visitInsn(Opcodes.RETURN)
+            }
+        }}
     }
 
-    def injectClass(name: String, bytecodes: Array[Byte]): Class[_] =
+    def injectClass(name: String, bytecodes: Array[Byte]): java.lang.Class[_] =
     {
         val loader = getClass.getClassLoader
         val injector = classOf[ClassLoader].getDeclaredMethod("defineClass", classOf[String], classOf[Array[Byte]], classOf[Int], classOf[Int])
 
         injector.setAccessible(true)
-        injector.invoke(loader, name, bytecodes, 0: Integer, bytecodes.length: Integer).asInstanceOf[Class[_]]
+        injector.invoke(loader, name, bytecodes, 0: Integer, bytecodes.length: Integer).asInstanceOf[java.lang.Class[_]]
     }
 }

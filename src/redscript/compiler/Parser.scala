@@ -2,7 +2,7 @@ package redscript.compiler
 
 import redscript.compiler.ast._
 
-import scala.language.postfixOps
+import scala.language.{implicitConversions, postfixOps}
 import scala.util.parsing.combinator.syntactical.StdTokenParsers
 import scala.util.parsing.input.CharArrayReader
 
@@ -13,10 +13,12 @@ class Parser(val source: String) extends StdTokenParsers
 
     type Exprs      = List[NodeExpr]
     type Names      = List[Identifier]
+    type Impls      = List[Names]
     type Targets    = List[NodeLValue]
     type Arguments  = List[NodeArgument]
-    type Implements = List[Names]
     type Statements = List[NodeStatement]
+
+    private implicit def name2identifier(name: String): Identifier = Identifier(name)
 
     private lazy val intLit   : Parser[Long]   = accept("int"  , { case lexical.IntLit(value)   => value })
     private lazy val floatLit : Parser[Double] = accept("float", { case lexical.FloatLit(value) => value })
@@ -28,15 +30,19 @@ class Parser(val source: String) extends StdTokenParsers
 
     private lazy val parseIf        : Parser[NodeIf]        = ("if" ~> parseExpr <~ "then") ~ (parseStatement +) ~ (("else" ~> (parseStatement +)) ?) <~ "end" ^^ { case expr ~ success ~ failed      => new NodeIf(expr, success, failed) }
     private lazy val parseFor       : Parser[NodeFor]       = ("for" ~> identifier <~ "in") ~ parseExpr ~ ("do" ~> (parseStatement +) <~ "end")                ^^ { case name ~ expr ~ body           => new NodeFor(name, expr, body) }
-    private lazy val parseClass     : Parser[NodeClass]     = "class" ~> identifier ~ (parseExtends ?) ~ (parseImpls ?) ~ (parseStatement *) <~ "end"          ^^ { case name ~ parent ~ intfs ~ body => new NodeClass(name, parent, intfs, body) }
+    private lazy val parseClass     : Parser[NodeClass]     = "class" ~> identifier ~ parseExtends ~ parseImpls ~ (parseStatement *) <~ "end"                  ^^ { case name ~ parent ~ intfs ~ body => new NodeClass(name, parent, intfs, body) }
     private lazy val parseRaise     : Parser[NodeRaise]     = "raise" ~> parseExpr                                                                             ^^ { case expr                         => new NodeRaise(expr) }
     private lazy val parseWhile     : Parser[NodeWhile]     = ("while" ~> parseExpr <~ "do") ~ ((parseStatement *) <~ "end")                                   ^^ { case cond ~ body                  => new NodeWhile(cond, body) }
     private lazy val parseSelect    : Parser[NodeSelect]    = ("select" ~> parseExpr <~ "in") ~ (parseCase +) ~ (("default" ~> (parseStatement +)) ?) <~ "end" ^^ { case expr ~ cases ~ default       => new NodeSelect(expr, cases, default) }
-    private lazy val parseFunction  : Parser[NodeFunction]  = parseDecorator ~ ("func" ~> identifier) ~ parseArguments ~ ("as" ~> (parseStatement *) <~ "end") ^^ { case decors ~ name ~ args ~ body  => new NodeFunction(name, args, body, decors) }
+    private lazy val parseFunction  : Parser[NodeFunction]  = parseDecorator ~ ("def" ~> identifier) ~ parseArguments ~ ("as" ~> (parseStatement *) <~ "end")  ^^ { case decors ~ name ~ args ~ body  => new NodeFunction(name, args, body, decors) }
 
-    private lazy val parseImpls     : Parser[Implements]    = "(" ~> rep1sep(attribute, ",") <~ ")"
-    private lazy val parseExtends   : Parser[Names]         = "extends" ~> attribute
+    private lazy val parseExtends   : Parser[Names]         = (("extends" ~> attribute) ?)                ^^ (_.getOrElse(List("java", "lang", "Object")))
     private lazy val parseFinally   : Parser[Statements]    = "finally" ~> (parseStatement +)
+
+    private lazy val parseImpls     : Parser[Impls]         = (("(" ~> rep1sep(attribute, ",") <~ ")") ?) ^^ {
+        case None    => List()
+        case Some(x) => x
+    }
 
     private lazy val parseTry       : Parser[NodeTry]       = "try" ~> (parseStatement +) ~ (parseExcept *) ~ (parseFinally ?) <~ "end" ^? {
         case body ~ except ~ cleanup

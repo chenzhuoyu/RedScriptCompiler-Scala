@@ -14,12 +14,12 @@ class Tokenizer extends StdLexical with TokenSpace
         "do",
         "if",
         "in",
+        "def",
         "end",
         "for",
         "try",
         "case",
         "else",
-        "func",
         "then",
         "break",
         "class",
@@ -52,7 +52,7 @@ class Tokenizer extends StdLexical with TokenSpace
         "\n"
     )
 
-    private def stringOf(p: => Parser[Char]): Parser[String] = rep1(p) ^^ (_ mkString "")
+    private def stringOf(p: => Parser[Char]): Parser[String] = rep1(p) ^^ (_.mkString)
 
     private lazy val octalDigit      : Parser[Long] = elem("octal digit" , c => '0' <= c && c <= '7') ^^ (_ - '0')
     private lazy val binaryDigit     : Parser[Long] = elem("binary digit", c => c == '0' || c == '1') ^^ (_ - '0')
@@ -75,7 +75,7 @@ class Tokenizer extends StdLexical with TokenSpace
         | 'r' ^^^ '\r')
 
     private lazy val identifier: Parser[Token] =
-        identChar ~ ((identChar | digit) *) ^^ { case first ~ rest => processIdent(first :: rest mkString "") }
+        identChar ~ ((identChar | digit) *) ^^ { case first ~ rest => processIdent(first :: rest mkString) }
 
     private lazy val numberLiteral: Parser[Token] =
         ( '.' ~> stringOf(digit)                              ^^ { case       fract => FloatLit(   s"0.$fract".toFloat) }

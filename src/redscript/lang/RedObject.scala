@@ -2,6 +2,8 @@ package redscript.lang
 
 import java.lang.reflect.Executable
 
+import redscript.lang.bridge.{InstanceBridge, ClassBridge}
+
 import scala.collection.mutable
 import scala.language.postfixOps
 
@@ -128,8 +130,20 @@ object RedObject
         case v: java.lang.Character   => RedString(v.toString)
         case v: java.lang.Throwable   => RedException(v)
 
+        case v: Array[_]              => new RedTuple(v map {
+            case x: Int => RedInt(x)
+            case x: Byte => RedInt(x)
+            case x: Long => RedInt(x)
+            case x: Short => RedInt(x)
+
+            case x: Float => RedFloat(x)
+            case x: Double => RedFloat(x)
+
+            case x: Char => RedString(x.toString)
+        })
+
         case v: RedObject             => v
-        case v if v.getClass.isArray  => new RedTuple(v.asInstanceOf[Array[AnyRef]] map wrapObject)
+        case v: ClassBridge           => v.toRedObject
         case v: Class[_]              => new RedJavaClass(v)
         case v                        => new RedJavaObject(v)
     }
@@ -207,17 +221,19 @@ object RedObject
 
         case v if v == classOf[java.lang.Object] => value match
         {
-            case v: RedJavaClass  => Some((v.cls, 5))
-            case v: RedJavaObject => Some((v.obj, 9))
-            case _                => Some((value, 1))
+            case v: RedJavaClass   => Some((v.cls, 5))
+            case v: RedJavaObject  => Some((v.obj, 9))
+            case v: InstanceBridge => Some((v.toJavaInstance, 9))
+            case _                 => Some((value, 1))
         }
 
         case _ => value match
         {
-            case v: RedJavaClass  if target.isAssignableFrom(v.cls.getClass) => Some((v.cls, 9))
-            case v: RedJavaObject if target.isAssignableFrom(v.obj.getClass) => Some((v.obj, 9))
-            case _                if target.isAssignableFrom(value.getClass) => Some((value, 3))
-            case _                                                           => None
+            case v: RedJavaClass   if target.isAssignableFrom(v.cls.getClass)            => Some((v.cls, 9))
+            case v: RedJavaObject  if target.isAssignableFrom(v.obj.getClass)            => Some((v.obj, 9))
+            case v: InstanceBridge if target.isAssignableFrom(v.toJavaInstance.getClass) => Some((v.toJavaInstance, 9))
+            case _                 if target.isAssignableFrom(value.getClass)            => Some((value, 3))
+            case _                                                                       => None
         }
     }
 
@@ -226,15 +242,18 @@ object RedObject
         var score = 0L
         val params = new Array[AnyRef](args.length)
 
-        for (((actual, formal), index) <- args zip callable.getParameterTypes zipWithIndex) RedObject.convertObject(actual, formal) match
+        for (((actual, formal), index) <- args zip callable.getParameterTypes zipWithIndex)
         {
-            case None =>
-                return (null, -1)
+            RedObject.convertObject(actual, formal) match
+            {
+                case None =>
+                    return (null, -1)
 
-            case Some((result, factor)) =>
-                score *= 10
-                score += factor
-                params(index) = result
+                case Some((result, factor)) =>
+                    score *= 10
+                    score += factor
+                    params(index) = result
+            }
         }
 
         (params, score)

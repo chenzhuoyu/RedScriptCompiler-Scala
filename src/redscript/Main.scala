@@ -7,10 +7,21 @@ object Main extends App
 {
     val src =
         """
-          | func foo(a, >b) as
-          |     println('test', a, b)
+          | class FooClass
+          |     x = 100
+          |     def test(self) as
+          |         return 1
+          |     end
+          |     def __init__(self) as
+          |         println(self)
+          |     end
+          |     def __getattr__(self, name) as
+          |         return 1
+          |     end
+          |     def __invoke__(self, a, b) as
+          |         println(a, b)
+          |     end
           | end
-          | foo(1)
         """.stripMargin
 
     val parser = new Parser(src)
