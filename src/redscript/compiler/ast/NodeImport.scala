@@ -2,7 +2,7 @@ package redscript.compiler.ast
 
 import org.objectweb.asm.{Opcodes, Type}
 import redscript.compiler.Assembler
-import redscript.lang.SemanticError
+import redscript.lang.{RedClass, SemanticError}
 
 class NodeImport(names: List[Identifier], alias: Identifier) extends Node
 {
@@ -13,7 +13,8 @@ class NodeImport(names: List[Identifier], alias: Identifier) extends Node
 
         assembler.findImport(name) match
         {
-            case None =>
+            case None => if (!RedClass.isRedClass(desc))
+            {
                 assembler.makeField(name, forceStatic = true)
                 assembler.cacheImport(name, desc)
                 assembler.visitor.visitTypeInsn(Opcodes.NEW, "redscript/lang/RedJavaClass")
@@ -21,6 +22,17 @@ class NodeImport(names: List[Identifier], alias: Identifier) extends Node
                 assembler.visitor.visitLdcInsn(Type.getType(s"L$desc;"))
                 assembler.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, "redscript/lang/RedJavaClass", "<init>", "(Ljava/lang/Class;)V", false)
                 assembler.visitor.visitFieldInsn(Opcodes.PUTSTATIC, assembler.name, name, "Lredscript/lang/RedObject;")
+            }
+            else
+            {
+                assembler.makeField(name, forceStatic = true)
+                assembler.cacheImport(name, desc)
+                assembler.visitor.visitTypeInsn(Opcodes.NEW, "redscript/lang/RedInternalClass")
+                assembler.visitor.visitInsn(Opcodes.DUP)
+                assembler.visitor.visitLdcInsn(Type.getType(s"L$desc;"))
+                assembler.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, "redscript/lang/RedInternalClass", "<init>", "(Ljava/lang/Class;)V", false)
+                assembler.visitor.visitFieldInsn(Opcodes.PUTSTATIC, assembler.name, name, "Lredscript/lang/RedObject;")
+            }
 
             case Some(_) =>
                 throw new SemanticError(s"Import conflict for name `$name`, consider using alias")

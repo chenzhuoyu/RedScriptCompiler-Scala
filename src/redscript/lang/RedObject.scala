@@ -76,28 +76,20 @@ class RedObject
 
     def __dir__ : RedTuple =
     {
-        val fields = getClass.getFields map (_.getName) map RedString.apply
-        val methods = getClass.getMethods map (_.getName) map RedString.apply
-        new RedTuple(fields ++ methods)
+        val fields = getClass.getFields map (_.getName)
+        val methods = getClass.getMethods map (_.getName)
+        new RedTuple((fields ++ methods).distinct map RedString.apply)
     }
 
-    def __getattr__(name: String): RedObject =
+    def __getattr__(name: String): RedObject = __dict__ get name match
     {
-        if (__dict__ contains name)
-            return __dict__(name)
-
-        if (getClass.getFields exists (_.getName == name))
-            return RedObject.wrapObject(getClass.getField(name).get(this))
-
-        val methods = getClass.getMethods filter (_.getName == name)
-
-        if (methods.isEmpty)
-            throw new AttributeError(s"No such attribute `$name`")
-
-        if (methods.length > 1 || methods.head.getParameterCount > 0)
-            new RedCallable(name, this, methods)
-        else
-            RedObject.wrapObject(methods.head.invoke(this))
+        case Some(value) => value
+        case None => getClass.getMethods filter (_.getName == name) match
+        {
+            case methods if methods.nonEmpty                              => new RedCallable(name, this, methods)
+            case methods if getClass.getFields exists (_.getName == name) => RedObject.wrapObject(getClass.getField(name).get(this))
+            case _                                                        => throw new AttributeError(s"No such attribute `$name`")
+        }
     }
 
     override def toString = __str__

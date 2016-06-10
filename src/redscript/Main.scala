@@ -6,22 +6,21 @@ import redscript.lang.RedObject
 object Main extends App
 {
     val src =
-        """
+        """ import redscript.lang.RedObject
           | class FooClass
-          |     x = 100
+          |     def __init__(self, x) as
+          |         self.x_value = x
+          |     end
           |     def test(self) as
-          |         return 1
+          |         println(self.x_value)
           |     end
-          |     def __init__(self) as
-          |         println(self)
-          |     end
-          |     def __getattr__(self, name) as
-          |         return 1
-          |     end
-          |     def __invoke__(self, a, b) as
-          |         println(a, b)
+          |     def __getattr__(self, item) as
+          |         println(item)
+          |         return RedObject.__getattr__(self, item + "_value")
           |     end
           | end
+          | f = FooClass(123)
+          | println(f.x)
         """.stripMargin
 
     val parser = new Parser(src)

@@ -19,32 +19,16 @@ class RedJavaClass(val cls: Class[_]) extends RedObject
 
     override def __dir__ : RedTuple =
     {
-        val fields = cls.getFields map (_.getName) map RedString.apply
-        val methods = cls.getMethods map (_.getName) map RedString.apply
-        new RedTuple(fields ++ methods)
+        val fields = cls.getFields map (_.getName)
+        val methods = cls.getMethods map (_.getName)
+        new RedTuple((fields ++ methods).distinct map RedString.apply)
     }
 
-    override def __getattr__(name: String): RedObject =
+    override def __getattr__(name: String): RedObject = cls.getMethods filter (_.getName == name) match
     {
-        if (cls.getFields exists (_.getName == name))
-            return RedObject.wrapObject(cls.getField(name).get(cls))
-
-        val methods = cls.getMethods filter (_.getName == name)
-
-        if (methods.isEmpty)
-            return super.__getattr__(name)
-
-        if (methods.length > 1 || methods.head.getParameterCount > 0)
-            return new RedCallable(name, cls, methods)
-
-        try
-        {
-            RedObject.wrapObject(methods.head.invoke(cls))
-        } catch
-        {
-            case e: InvocationTargetException =>
-                throw e.getCause
-        }
+        case methods if methods.nonEmpty                         => new RedCallable(name, cls, methods)
+        case methods if cls.getFields exists (_.getName == name) => RedObject.wrapObject(cls.getField(name).get(cls))
+        case _                                                   => super.__getattr__(name)
     }
 
     override def __invoke__(args: Array[RedObject]): RedObject =

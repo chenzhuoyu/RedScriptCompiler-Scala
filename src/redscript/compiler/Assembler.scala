@@ -149,6 +149,12 @@ object Assembler
             writer.visitField(if (isStatic) Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC else Opcodes.ACC_PUBLIC, field, "Lredscript/lang/RedObject;", null, null).visitEnd()
         }
 
+        def makeJavaField(field: String, descriptor: String) = if (!fields.contains(field))
+        {
+            fields(field) = false
+            writer.visitField(Opcodes.ACC_FINAL | Opcodes.ACC_SYNTHETIC, field, descriptor, null, null).visitEnd()
+        }
+
         def makeSyntheticField(field: String) = if (!fields.contains(field))
         {
             fields(field) = false

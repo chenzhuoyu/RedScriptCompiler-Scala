@@ -302,19 +302,23 @@ class NodeClass(name: Identifier, parent: List[Identifier], intfs: List[List[Ide
 
     override def assemble(assembler: Assembler): Unit =
     {
-        val superClass = parent.length match
+        val superClass = Class.forName(parent.length match
         {
             case 1 => assembler.findImport(parent.head.value) match
             {
-                case None    => parent map (_.value) mkString "/"
+                case None    => parent map (_.value) mkString "."
                 case Some(v) => v
             }
 
-            case _ => parent map (_.value) mkString "/"
-        }
+            case _ => parent map (_.value) mkString "."
+        })
+
+        val newSuperClass    = if ( classOf[RedObject].isAssignableFrom(superClass)) Type.getInternalName(superClass) else "redscript/lang/RedObject"
+        val bridgeSuperClass = if (!classOf[RedObject].isAssignableFrom(superClass)) Type.getInternalName(superClass) else "java/lang/Object"
 
         val fname = s"class$$${name.value}"
-        val newClass = assembler.makeClass(fname, "redscript/lang/RedObject", null, hasOwnerClass = true) { newClass =>
+        val bname = s"${assembler.name}$$${name.value}"
+        val newClass = assembler.makeClass(fname, newSuperClass, Array("redscript/lang/bridge/InstanceBridge"), hasOwnerClass = true) { newClass =>
         {
             newClass.makeMethod("<clinit>", "()V", isStatic = true)(newClass.method.assemble(body))
             newClass.makeMethod("<init>", "([Lredscript/lang/RedObject;)V", isStatic = false)
@@ -324,18 +328,30 @@ class NodeClass(name: Identifier, parent: List[Identifier], intfs: List[List[Ide
                 assembler.visitor.visitVarInsn(Opcodes.ALOAD, 0)
                 assembler.visitor.visitVarInsn(Opcodes.ALOAD, 1)
                 assembler.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, newClass.name, "__init__", "([Lredscript/lang/RedObject;)V", false)
+                assembler.visitor.visitInsn(Opcodes.RETURN)
+            }
+
+            newClass.makeJavaField("$instance", s"L$bname;")
+            newClass.makeMethod("toJavaInstance", "()Ljava/lang/Object;", isStatic = false)
+            {
+                assembler.visitor.visitVarInsn(Opcodes.ALOAD, 0)
+                assembler.visitor.visitFieldInsn(Opcodes.GETFIELD, newClass.name, "$instance", s"L$bname;")
+                assembler.visitor.visitInsn(Opcodes.ARETURN)
             }
 
             classOf[RedObject].getMethods filter { method => method.getName.endsWith("__") && method.getName.startsWith("__") } foreach { method =>
             {
-                if (newClass.methods exists { case ((methodName, desc), _) => methodName == method.getName })
+                val methodName = method.getName
+                val methodDesc = Type.getMethodDescriptor(method)
+
+                if (newClass.methods exists { case ((mname, desc), _) => desc != methodDesc && mname == methodName })
                 {
-                    newClass.makeMethod(method.getName, Type.getMethodDescriptor(method), isStatic = false)
+                    newClass.makeMethod(method.getName, methodDesc, isStatic = false)
                     {
                         method.getName match
                         {
                             case "__init__" | "__invoke__" =>
-                                assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, newClass.name, method.getName, "Lredscript/lang/RedObject;")
+                                assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, newClass.name, methodName, "Lredscript/lang/RedObject;")
                                 assembler.visitor.visitVarInsn(Opcodes.ALOAD, 1)
                                 assembler.visitor.visitInsn(Opcodes.ICONST_0)
                                 assembler.visitor.visitVarInsn(Opcodes.ALOAD, 1)
@@ -352,20 +368,12 @@ class NodeClass(name: Identifier, parent: List[Identifier], intfs: List[List[Ide
                                 assembler.visitor.visitVarInsn(Opcodes.ALOAD, 1)
                                 assembler.visitor.visitInsn(Opcodes.ARRAYLENGTH)
                                 assembler.visitor.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/System", "arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V", false)
-
-                                if (method.getName == "__init__")
-                                {
-                                    assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__init__", "([Lredscript/lang/RedObject;)V", false)
-                                    assembler.visitor.visitInsn(Opcodes.RETURN)
-                                }
-                                else
-                                {
-                                    assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__invoke__", "([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", false)
-                                    assembler.visitor.visitInsn(Opcodes.ARETURN)
-                                }
+                                assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__invoke__", "([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", false)
+                                assembler.visitor.visitInsn(Opcodes.POP)
+                                assembler.visitor.visitInsn(Opcodes.RETURN)
 
                             case _ =>
-                                assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, newClass.name, method.getName, "Lredscript/lang/RedObject;")
+                                assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, newClass.name, methodName, "Lredscript/lang/RedObject;")
                                 assembler.visitor.visitLdcInsn(method.getParameterCount + 1)
                                 assembler.visitor.visitTypeInsn(Opcodes.ANEWARRAY, "redscript/lang/RedObject")
                                 assembler.visitor.visitInsn(Opcodes.DUP)
@@ -378,7 +386,7 @@ class NodeClass(name: Identifier, parent: List[Identifier], intfs: List[List[Ide
                                         setArgs(assembler, argtype, index + 1)
                                 }
 
-                                assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject;", "__invoke__", "([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", false)
+                                assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__invoke__", "([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", false)
                                 makeReturn(assembler, method)
                         }
                     }
@@ -395,27 +403,28 @@ class NodeClass(name: Identifier, parent: List[Identifier], intfs: List[List[Ide
             }
         } toArray) distinct
 
-        assembler.makeClass(name.value, superClass, interfaces ++ ("redscript/lang/bridge/ClassBridge" :: Nil), hasOwnerClass = true) { bridgeClass =>
+        assembler.makeClass(name.value, bridgeSuperClass, interfaces ++ ("redscript/lang/bridge/ClassBridge" :: Nil), hasOwnerClass = true) { bridgeClass =>
         {
             bridgeClass.makeMethod("<init>", s"(L${newClass.name};)V", isStatic = false)
             {
                 assembler.visitor.visitVarInsn(Opcodes.ALOAD, 0)
-                assembler.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, superClass, "<init>", "()V", false)
+                assembler.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, bridgeSuperClass, "<init>", "()V", false)
                 assembler.visitor.visitVarInsn(Opcodes.ALOAD, 0)
                 assembler.visitor.visitVarInsn(Opcodes.ALOAD, 1)
                 assembler.visitor.visitFieldInsn(Opcodes.PUTFIELD, newClass.name, "$instance", "Lredscript/lang/RedObject;")
                 assembler.visitor.visitInsn(Opcodes.RETURN)
             }
 
+            bridgeClass.makeSyntheticField("$instance")
             bridgeClass.makeMethod("<init>", "([Lredscript/lang/RedObject;)V", isStatic = false)
             {
-                assembler.classes.top.makeSyntheticField("$instance")
                 assembler.visitor.visitVarInsn(Opcodes.ALOAD, 0)
                 assembler.visitor.visitTypeInsn(Opcodes.NEW, newClass.name)
                 assembler.visitor.visitInsn(Opcodes.DUP)
                 assembler.visitor.visitVarInsn(Opcodes.ALOAD, 1)
                 assembler.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, newClass.name, "<init>", "([Lredscript/lang/RedObject;)V", false)
                 assembler.visitor.visitMethodInsn(Opcodes.INVOKESPECIAL, bridgeClass.name, "<init>", s"(L${newClass.name};)V", false)
+                assembler.visitor.visitInsn(Opcodes.RETURN)
             }
 
             bridgeClass.makeMethod("toRedObject", "()Lredscript/lang/RedObject;", isStatic = false)
@@ -425,7 +434,7 @@ class NodeClass(name: Identifier, parent: List[Identifier], intfs: List[List[Ide
                 assembler.visitor.visitInsn(Opcodes.ARETURN)
             }
 
-            interfaces ++ (superClass :: Nil) foreach { name =>
+            interfaces ++ (bridgeSuperClass :: Nil) foreach { name =>
             {
                 Class.forName(name.replace("/", ".")).getMethods foreach {
                     case method if Modifier.isAbstract(method.getModifiers) =>

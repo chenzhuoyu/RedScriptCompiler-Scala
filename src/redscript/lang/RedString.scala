@@ -3,8 +3,7 @@ package redscript.lang
 class RedString private(val value: String) extends RedObject
 {
     override def __str__ : String = value
-    override def __repr__ : String = (value.toList map { _ match
-    {
+    override def __repr__ : String = (value.toList map {
         case '\t' => "\\t"
         case '\n' => "\\n"
         case '\r' => "\\r"
@@ -15,9 +14,15 @@ class RedString private(val value: String) extends RedObject
         case ch =>
             val hex = Integer.toHexString(ch.toInt)
             "\\u%s%s".format("0" * (4 - hex.length), hex)
-    }}) mkString ("\"", "", "\"")
+    }) mkString ("\"", "", "\"")
 
     override def __hash__ : Int = value.hashCode
+
+    override def __add__(other: RedObject): RedObject = other match
+    {
+        case x: RedString   => RedString(value + x.value)
+        case _              => throw new TypeError(s"${other.getClass.getName} canot be coerced with Int")
+    }
 }
 
 object RedString

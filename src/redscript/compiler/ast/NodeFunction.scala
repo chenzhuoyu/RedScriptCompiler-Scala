@@ -28,6 +28,7 @@ class NodeFunction(name: Identifier, args: List[NodeArgument], body: List[NodeSt
 
         val label = new Label
         val owner = assembler.name
+        val isModule = assembler.classes.length == 1
         val isInline = !assembler.classes.top.method.isRoot
         val funcName = if (name != null) name.value else s"lambda$$${LambdaCounter()}"
         val methodClass = assembler.makeInnerClass(s"func$$$funcName", "redscript/lang/RedFunction", Array()) { methodClass =>
@@ -181,73 +182,75 @@ class NodeFunction(name: Identifier, args: List[NodeArgument], body: List[NodeSt
             }
         }
 
-        if (name != null)
+        if (!isInline && !isModule && name != null && args.nonEmpty)
         {
-            if (args.isEmpty)
+            if (args.length == 1)
             {
-                assembler.classes.top.makeMethod(name.value, "()Lredscript/lang/RedObject;", isStatic = !isInline)
+                assembler.classes.top.makeMethod(name.value, "()Lredscript/lang/RedObject;", isStatic = false)
                 {
                     assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, owner, name.value, "Lredscript/lang/RedObject;")
-                    assembler.visitor.visitInsn(Opcodes.ICONST_0)
+                    assembler.visitor.visitInsn(Opcodes.ICONST_1)
                     assembler.visitor.visitTypeInsn(Opcodes.ANEWARRAY, "redscript/lang/RedObject")
+                    assembler.visitor.visitInsn(Opcodes.DUP)
+                    assembler.visitor.visitInsn(Opcodes.ICONST_0)
+                    assembler.visitor.visitVarInsn(Opcodes.ALOAD, 0)
+                    assembler.visitor.visitInsn(Opcodes.AASTORE)
                     assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__invoke__", "([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", false)
                     assembler.visitor.visitInsn(Opcodes.ARETURN)
                 }
             }
             else if (!args.last.variant)
             {
-                assembler.classes.top.makeMethod(name.value, s"(${"Lredscript/lang/RedObject;" * args.length})Lredscript/lang/RedObject;", isStatic = !isInline)
+                assembler.classes.top.makeMethod(name.value, s"(${"Lredscript/lang/RedObject;" * (args.length - 1)})Lredscript/lang/RedObject;", isStatic = false)
                 {
                     assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, owner, name.value, "Lredscript/lang/RedObject;")
                     assembler.visitor.visitLdcInsn(args.length)
                     assembler.visitor.visitTypeInsn(Opcodes.ANEWARRAY, "redscript/lang/RedObject")
+                    assembler.visitor.visitInsn(Opcodes.DUP)
+                    assembler.visitor.visitInsn(Opcodes.ICONST_0)
+                    assembler.visitor.visitVarInsn(Opcodes.ALOAD, 0)
+                    assembler.visitor.visitInsn(Opcodes.AASTORE)
 
-                    args.zipWithIndex foreach {
+                    args.zipWithIndex drop 1 foreach {
                         case (arg, index) =>
                             assembler.visitor.visitInsn(Opcodes.DUP)
                             assembler.visitor.visitLdcInsn(index)
-                            assembler.visitor.visitVarInsn(Opcodes.ALOAD, if (isInline) index + 1 else index)
+                            assembler.visitor.visitVarInsn(Opcodes.ALOAD, index)
                             assembler.visitor.visitInsn(Opcodes.AASTORE)
                     }
 
-                    assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__invoke__", "([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", false)
-                    assembler.visitor.visitInsn(Opcodes.ARETURN)
-                }
-            }
-            else if (args.length == 1)
-            {
-                assembler.classes.top.makeMethod(name.value, s"([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", isStatic = !isInline)
-                {
-                    assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, owner, name.value, "Lredscript/lang/RedObject;")
-                    assembler.visitor.visitVarInsn(Opcodes.ALOAD, if (isInline) 1 else 0)
                     assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__invoke__", "([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", false)
                     assembler.visitor.visitInsn(Opcodes.ARETURN)
                 }
             }
             else
             {
-                assembler.classes.top.makeMethod(name.value, s"(${"Lredscript/lang/RedObject;" * (args.length - 1)}[Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", isStatic = !isInline)
+                assembler.classes.top.makeMethod(name.value, s"(${"Lredscript/lang/RedObject;" * (args.length - 2)}[Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", isStatic = false)
                 {
                     assembler.visitor.visitFieldInsn(Opcodes.GETSTATIC, owner, name.value, "Lredscript/lang/RedObject;")
-                    assembler.visitor.visitVarInsn(Opcodes.ALOAD, if (isInline) args.length else args.length - 1)
+                    assembler.visitor.visitVarInsn(Opcodes.ALOAD, args.length - 1)
                     assembler.visitor.visitInsn(Opcodes.ICONST_0)
-                    assembler.visitor.visitVarInsn(Opcodes.ALOAD, if (isInline) args.length else args.length - 1)
+                    assembler.visitor.visitVarInsn(Opcodes.ALOAD, args.length - 1)
                     assembler.visitor.visitInsn(Opcodes.ARRAYLENGTH)
                     assembler.visitor.visitLdcInsn(args.length - 1)
                     assembler.visitor.visitInsn(Opcodes.IADD)
                     assembler.visitor.visitTypeInsn(Opcodes.ANEWARRAY, "redscript/lang/RedObject")
+                    assembler.visitor.visitInsn(Opcodes.DUP)
+                    assembler.visitor.visitInsn(Opcodes.ICONST_0)
+                    assembler.visitor.visitVarInsn(Opcodes.ALOAD, 0)
+                    assembler.visitor.visitInsn(Opcodes.AASTORE)
 
-                    args.zipWithIndex dropRight 1 foreach {
+                    args.zipWithIndex drop 1 dropRight 1 foreach {
                         case (arg, index) =>
                             assembler.visitor.visitInsn(Opcodes.DUP)
                             assembler.visitor.visitLdcInsn(index)
-                            assembler.visitor.visitVarInsn(Opcodes.ALOAD, if (isInline) index + 1 else index)
+                            assembler.visitor.visitVarInsn(Opcodes.ALOAD, index)
                             assembler.visitor.visitInsn(Opcodes.AASTORE)
                     }
 
                     assembler.visitor.visitInsn(Opcodes.DUP_X2)
                     assembler.visitor.visitLdcInsn(args.length - 1)
-                    assembler.visitor.visitVarInsn(Opcodes.ALOAD, if (isInline) args.length else args.length - 1)
+                    assembler.visitor.visitVarInsn(Opcodes.ALOAD, args.length - 1)
                     assembler.visitor.visitInsn(Opcodes.ARRAYLENGTH)
                     assembler.visitor.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/System", "arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V", false)
                     assembler.visitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "redscript/lang/RedObject", "__invoke__", "([Lredscript/lang/RedObject;)Lredscript/lang/RedObject;", false)
